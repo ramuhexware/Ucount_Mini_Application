@@ -26,6 +26,12 @@ public class LoanControllerTest {
     @Mock
     private LoanOriginationService loanOriginationService;
 
+    @Mock
+    private com.freddieapp.loanorigination.service.EmailNotificationClientServicer emailNotificationClientServicer;
+
+    @Mock
+    private com.freddieapp.loanorigination.config.EmailNotificationClientConfig emailNotificationClientConfig;
+
     @InjectMocks
     private LoanController loanController;
 

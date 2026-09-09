@@ -14,6 +14,8 @@ import com.freddieapp.underwriting.processor.UnderwritingRuleProcessor;
 import com.freddieapp.underwriting.repository.UnderwritingAssessmentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +25,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
 
 @Slf4j
 @Service
@@ -250,7 +253,24 @@ public class UnderwritingEngine {
         return toResponse(updated);
     }
 
+    public UnderwritingResponse getLatestAssessment(String loanId) {
+        return assessmentRepository.findLatestByLoanIdNative(loanId)
+                .map(this::toResponse)
+                .orElse(null);
+    }
+
+    public Page<UnderwritingResponse> getCustomerAssessments(String customerId, Pageable pageable) {
+        return assessmentRepository.findByCustomerIdNative(customerId, pageable)
+                .map(this::toResponse);
+    }
+
+    public Page<UnderwritingResponse> getAllAssessments(Pageable pageable) {
+        return assessmentRepository.findAll(pageable)
+                .map(this::toResponse);
+    }
+
     private UnderwritingResponse toResponse(UnderwritingAssessment assessment) {
+
         return UnderwritingResponse.builder()
                 .assessmentId(assessment.getAssessmentId())
                 .loanId(assessment.getLoanId())

@@ -1,436 +1,464 @@
-# Freddie Mac-Style Home Loan & Customer Management Platform
+# 🏦 Freddie Mac Home Loan Platform (`freddie-loan-platform`)
 
-This repository contains a streamlined, production-grade, distributed Home Loan Application and Customer Management system designed around Freddie Mac system specifications. It employs a domain-driven microservices architecture supporting core mortgage lifecycle phases: borrower intake, user authentication, loan origination, document management, rate calculation, and automated underwriting risk assessment.
+[![Java 21](https://img.shields.io/badge/Java-21-orange.svg)](https://jdk.java.net/21/)
+[![Spring Boot 3.3.0](https://img.shields.io/badge/Spring%20Boot-3.3.0-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![Spring Cloud 2023.0.1](https://img.shields.io/badge/Spring%20Cloud-2023.0.1-blue.svg)](https://spring.io/projects/spring-cloud)
+[![License: Enterprise](https://img.shields.io/badge/License-Freddie%20Mac%20Enterprise-red.svg)]()
 
----
-
-## 🎯 Architecture Blueprint
-
-The platform uses a lean, high-performance microservices architecture comprising **10 microservices** (plus root aggregator) communicating via synchronous REST endpoints, Spring Cloud Gateway, Netflix Eureka service discovery, and dedicated PostgreSQL databases.
-
-```
-                                 ┌───────────────────────────────────────┐
-                                 │   Portal Clients / User Interfaces    │
-                                 │ ┌──────────────────┐ ┌──────────────┐ │
-                                 │ │ Login Portal (8086)│ │ Loan Portal  │ │
-                                 │ └────────┬─────────┘ └──────┬───────┘ │
-                                 └──────────┼──────────────────┼─────────┘
-                                            │ (HTTPS / REST)   │
-                                            ▼                  ▼
-                                ┌─────────────────────────────────────────┐
-                                │          API Gateway (Port 8080)        │
-                                └────────────────────┬────────────────────┘
-                                                     │
-         ┌───────────────────┬───────────────────────┼───────────────────────┬───────────────────┐
-         ▼                   ▼                       ▼                       ▼                   ▼
-┌─────────────────┐ ┌──────────────────┐  ┌────────────────────┐ ┌───────────────────┐ ┌───────────────────┐
-│  Auth Service   │ │ Customer Service │  │  Loan Origination  │ │Underwriting Engine│ │ Document Service  │
-│   (Port 8085)   │ │   (Port 8081)    │  │    (Port 8082)     │ │    (Port 8083)    │ │    (Port 8084)    │
-└────────┬────────┘ └────────┬─────────┘  └─────────┬──────────┘ └─────────┬─────────┘ └─────────┬─────────┘
-         │                   │                      │                      │                     │
-         ▼                   ▼                      ▼                      ▼                     ▼
-┌─────────────────┐ ┌──────────────────┐  ┌────────────────────────────────────────┐ ┌───────────────────┐
-│ Account Details │ │ Customer Details │  │     Loan Application PostgreSQL DB     │ │ Customer Details  │
-│  PostgreSQL DB  │ │  PostgreSQL DB   │  │             (freddie_loans)            │ │   PostgreSQL DB   │
-│ (user_accounts) │ │ (freddie_customer│  └────────────────────────────────────────┘ │ (freddie_customer)│
-└─────────────────┘ └──────────────────┘                                           └───────────────────┘
-```
+Welcome to the **Freddie Mac Home Loan Platform** (Ucount Mini Application) — a state-of-the-art enterprise microservices platform built with Java 21, Spring Boot 3.3, and PostgreSQL, designed for end-to-end mortgage origination, credit underwriting, risk assessment, reactive document management, and real-time interest rate pricing.
 
 ---
 
-## 🏛️ Standardized Directory & Package Structure
+## 1. 🏛️ Architecture of the Application
 
-All backend services adhere strictly to the following uniform package layout pattern:
+The application is architected as a cloud-native microservice ecosystem featuring service discovery via **Netflix Eureka**, edge routing and load balancing via **Spring Cloud Gateway**, and dedicated backend microservices powering specific domain bounded contexts.
 
-```text
-com.freddieapp.<service>/
-├── client/notification/  # Inter-service Feign/WebClient & Notification clients
-├── config/               # Spring & Swagger/OpenAPI configurations (Swagger2Config.java)
-├── controller/           # REST Controllers (@RestController)
-├── dto/                  # Data Transfer Objects & Request/Response payloads
-├── enums/                # Standalone Enum classes (e.g. LoanStatus, UserRole, Decision)
-├── exception/            # Custom domain exceptions & GlobalExceptionHandler (@RestControllerAdvice)
-├── processor/            # Business logic rules & data processing engines
-├── repository/           # Repositories (Spring Data ORM + Native SQL @Query methods)
-├── service/              # Service interface contracts & implementations (@Service)
-├── specification/        # Search & JPA Specifications
-└── <ServiceName>Application.java
+```
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                       UI FRONTEND LAYER                                          │
+│   ┌──────────────────────────────────────────┐    ┌──────────────────────────────────────────┐   │
+│   │   login-frontend-service (Port 8087)     │    │    loan-frontend-service (Port 8088)    │   │
+│   └────────────────────┬─────────────────────┘    └────────────────────┬─────────────────────┘   │
+└────────────────────────┼───────────────────────────────────────────────┼─────────────────────────┘
+                         │ (HTTP / REST)                                 │
+                         ▼                                               ▼
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                   API GATEWAY & DISCOVERY LAYER                                  │
+│   ┌──────────────────────────────────────────────────────────────────────────────────────────┐   │
+│   │                           API Gateway (Port 8080)                                        │   │
+│   └────────────────────────────────────────────┬─────────────────────────────────────────────┘   │
+│                                                │ Eureka Registry (Port 8761)                      │
+└────────────────────────────────────────────────┼─────────────────────────────────────────────────┘
+                                                 │
+      ┌───────────────────┬──────────────────────┼──────────────────────┬───────────────────┐
+      ▼                   ▼                      ▼                      ▼                   ▼
+┌───────────┐       ┌───────────┐          ┌───────────┐          ┌───────────┐       ┌───────────┐
+│   Auth    │       │ Customer  │          │   Loan    │          │Underwrit- │       │ Document  │
+│  Service  │       │  Service  │          │Origination│          │    ing    │       │  Service  │
+│(Port 8085)│       │(Port 8081)│          │(Port 8082)│          │(Port 8083)│       │(Port 8084)│
+└─────┬─────┘       └─────┬─────┘          └─────┬─────┘          └─────┬─────┘       └─────┬─────┘
+      │                   │                      │                      │                   │
+      ▼                   ▼                      ▼                      ▼                   ▼
+┌───────────┐       ┌───────────┐          ┌──────────────────────────────────┐       ┌───────────┐
+│ User Data │       │ Customer  │          │ Loan Applications & Underwriting │       │ Document  │
+│ (In-Mem)  │       │ (Postgres)│          │        (PostgreSQL DB Schema)    │       │ (R2DBC)   │
+└───────────┘       └───────────┘          └──────────────────────────────────┘       └───────────┘
 ```
 
 ---
 
-## ⚡ Backend Architecture Pattern
+## 2. 🔄 Functional Flows in the Application
 
-Each service enforces a clean **Controller → Service → Repository** separation of concerns:
+The Freddie Mac Home Loan Platform manages 6 primary end-to-end business functional flows across the mortgage borrowing lifecycle:
 
-```
-                  HTTP REST Request
-                         │
-                         ▼
-             ┌──────────────────────┐
-             │     Controller       │  (@RestController, /api/v1/...)
-             └───────────┬──────────┘
-                         │
-                         ▼
-             ┌──────────────────────┐
-             │      Service         │  (@Service, @Transactional)
-             └──────┬────────┬──────┘
-                    │        │
-          ┌─────────┘        └─────────┐
-          ▼                            ▼
-┌───────────────────┐        ┌───────────────────┐
-│     Processor     │        │    Repository     │  (Spring Data ORM +
-│ (Business Rules)  │        │   (Native Query)  │   Native SQL Queries)
-└───────────────────┘        └───────────────────┘
-```
+```mermaid
+flowchart TD
+    subgraph Flow 1: Auth & Security
+        A1[Borrower / Officer Login] --> A2[Generate Signed JWT Token]
+    end
+    subgraph Flow 2: Borrower Onboarding
+        B1[Register Borrower Profile] --> B2[KYC Verification Audit]
+    end
+    subgraph Flow 3: Rate Pricing
+        C1[Input Loan Amount & FICO] --> C2[Calculate Base Rate, LTV Surcharge & EMI]
+    end
+    subgraph Flow 4: Loan Origination
+        D1[Submit Loan Application] --> D2[Transition Status: SUBMITTED to UNDER_REVIEW]
+    end
+    subgraph Flow 5: Automated Underwriting
+        E1[Execute Underwriting Rules Engine] --> E2{Decision?}
+        E2 -->|APPROVED| E3[Generate 360-Month Amortization & LLPA]
+        E2 -->|REFERRED| E4[Manual Underwriter Override Flow]
+        E2 -->|DECLINED| E5[Rejection Notice & Audit Record]
+    end
+    subgraph Flow 6: Reactive Documents
+        F1[Upload Income & Tax Documents] --> F2[Reactive R2DBC Storage Indexing]
+    end
 
-* **Controller Layer**: Handles REST requests, validates payload parameters, and returns standardized HTTP responses.
-* **Service Layer**: Manages core business transactions, orchestrates processors, invokes inter-service Feign/WebClient calls, and coordinates notification clients.
-* **Processor Layer**: Houses isolated domain rules (e.g., rate scoring, risk scoring, token hashing, input sanitization).
-* **Repository Layer**: Combines standard Spring Data ORM capabilities with explicit native SQL queries (`@Query(..., nativeQuery = true)`) for maximum performance and flexible querying.
-* **Exception Layer**: Provides centralized error translation via `@RestControllerAdvice` (`GlobalExceptionHandler`).
-
----
-
-## 🧱 Microservices Portfolio
-
-The multi-module project aggregates 10 active microservices:
-
-| # | Microservice Module | Port | Architecture & Technology | Database / Persistence | Functional Scope |
-|---|---|---|---|---|---|
-| 1 | `eureka-server` | 8761 | Spring Cloud Netflix Eureka | Memory | Service Registry & Discovery Server |
-| 2 | `api-gateway` | 8080 | Spring Cloud Gateway (Reactive) | - | Edge API Gateway & Dynamic Route Dispatcher |
-| 3 | `auth-service` | 8085 | Pure Spring Microservice | PostgreSQL (`user_accounts`) | Authentication, User Account Details & JWT Token Generation |
-| 4 | `customer-service` | 8081 | Pure Spring Microservice | PostgreSQL (`freddie_customer`) | Borrower Profile, KYC & SSN Encryption |
-| 5 | `loan-origination-service` | 8082 | Pure Spring Microservice | PostgreSQL (`freddie_loans`) | Mortgage Application Intake, Tracking & Status Workflow |
-| 6 | `underwriting-service` | 8083 | Pure Spring Microservice | PostgreSQL (`freddie_loans`) | Automated Risk Assessment, Amortization & Manual Override |
-| 7 | `document-service` | 8084 | Spring WebFlux (Reactive R2DBC) | PostgreSQL (`freddie_customer`) | Document Storage Metadata & Verification |
-| 8 | `login-frontend-service` | 8086 | Pure Spring MVC | PostgreSQL (`user_accounts`) | Dedicated Login UI Frontend & Portal Audit Service |
-| 9 | `loan-frontend-service` | 8087 | Pure Spring MVC | PostgreSQL (`freddie_loans`) | Dedicated Loan Application & Tracking UI Portal |
-| 10 | `rate-calculator-service` | 8088 | Pure Spring Microservice | InMemory Benchmark Tables | Mortgage Interest Rate, LTV/Credit Adjustment & EMI Calculator |
-
----
-
-## 🔗 Call Chains from UI to DB
-
-Below are the detailed execution call chains mapping every class, method, processor, query, and database table in the flow from UI to Database across the primary user operations:
-
-### 1. 🔑 User Login & Authentication Call Chain (UI → DB)
-
-```text
-[ Browser / Login UI (Port 8086) ]
-           │
-           │  HTTP POST /api/v1/auth/login
-           ▼
-[ API Gateway (Port 8080) ]
-           │  (Dispatches route to AUTH-SERVICE)
-           ▼
-[ AuthController.java ]  (com.freddieapp.auth.controller)
-   └── method: login(@Valid @RequestBody LoginRequest request)
-           │
-           ▼
-[ AuthService.java ]  (com.freddieapp.auth.service)
-   └── method: login(LoginRequest request)
-           │
-           ├──► [ TokenProcessor.java ]  (com.freddieapp.auth.processor)
-           │       └── method: sanitizeUsername(username)
-           │
-           ├──► [ UserRepository.java ]  (com.freddieapp.auth.repository)
-           │       └── method: findUserAccountNative(String username)
-           │               │
-           │               ▼  (Native SQL Execution)
-           │       SELECT * FROM user_accounts WHERE username = :username AND status = 'ACTIVE'
-           │               │
-           │               ▼  (Database Table Target)
-           │       PostgreSQL Database (`user_accounts` DB) -> Table: `user_accounts`
-           │
-           ├──► [ TokenProcessor.java ]  (com.freddieapp.auth.processor)
-           │       └── method: validateCredentials(inputPassword, storedPassword)
-           │
-           ├──► [ JwtTokenProvider.java ]  (com.freddieapp.auth.config)
-           │       └── method: generateToken(username, roles) -> Produces JWT Bearer Token
-           │
-           └──► [ NotificationClient.java ]  (com.freddieapp.auth.client.notification)
-                   └── method: notifyAuthSuccess(username)
+    A2 --> B1 --> C1 --> D1 --> F1 --> E1
 ```
 
 ---
 
-### 2. 📝 Loan Application Submission Call Chain (UI → DB)
-
-```text
-[ Browser / Loan Portal UI (Port 8087) ]
-           │
-           │  HTTP POST /api/v1/loans
-           ▼
-[ API Gateway (Port 8080) ]
-           │  (Dispatches route to LOAN-ORIGINATION-SERVICE)
-           ▼
-[ LoanController.java ]  (com.freddieapp.loanorigination.controller)
-   └── method: submitLoanApplication(@Valid @RequestBody LoanApplicationRequest request)
-           │
-           ▼
-[ LoanOriginationService.java ]  (com.freddieapp.loanorigination.service)
-   └── method: submitLoanApplication(LoanApplicationRequest request)
-           │
-           ├──► [ CustomerClient.java (Feign) ]  (com.freddieapp.loanorigination.client)
-           │       └── HTTP GET /api/v1/customers/{customerId}
-           │               ▼
-           │       [ CustomerService.java ] in customer-service
-           │               ▼
-           │       SELECT * FROM customers WHERE customer_id = :id  (PostgreSQL: `freddie_customer` DB)
-           │
-           ├──► [ LoanRuleProcessor.java ]  (com.freddieapp.loanorigination.processor)
-           │       └── method: evaluateEligibility(loanAmount, dtiRatio) -> Asserts Minimum Criteria
-           │
-           ├──► [ LoanSpecification.java ]  (com.freddieapp.loanorigination.specification)
-           │       └── method: isEligibleForOrigination(LoanStatus.SUBMITTED)
-           │
-           ├──► [ LoanApplicationRepository.java ]  (com.freddieapp.loanorigination.repository)
-           │       └── method: saveNativeLoanApplication(...)  or  save(LoanApplication)
-           │               │
-           │               ▼  (Native SQL / ORM Execution)
-           │       INSERT INTO loan_applications (loan_id, customer_id, loan_amount, status, created_at)
-           │       VALUES (:loanId, :customerId, :loanAmount, 'SUBMITTED', CURRENT_TIMESTAMP)
-           │               │
-           │               ▼  (Database Table Target)
-           │       PostgreSQL Database (`freddie_loans` DB) -> Table: `loan_applications`
-           │
-           └──► [ NotificationClient.java ]  (com.freddieapp.loanorigination.client.notification)
-                   └── method: sendLoanSubmissionNotification(loanId, customerId)
-```
+### 🔑 2.1 Functional Flow 1: Authentication & Token Issuance (`auth-service`)
+- **Actors**: Borrower, Loan Officer, Senior Underwriter, System Administrator.
+- **Workflow**:
+  1. User submits credentials (`username`, `password`) on the Login Portal (`login-frontend-service` - Port 8087).
+  2. Request routes through API Gateway (`/api/v1/auth/login`) to `auth-service` (Port 8085).
+  3. `AuthService` queries `UserRepository` via ORM (`findUserByUsername`) and Native SQL simulation (`findPasswordByUsernameNative`).
+  4. Upon validation, `JwtTokenProvider` generates a signed OAuth2/JWT access token containing user roles (`ADMIN`, `LOAN_OFFICER`, `UNDERWRITER`, `CUSTOMER`).
+  5. `EmailNotificationClientServicer` dispatches a security notification alert.
+  6. Return `TokenResponse` with Access Token, Expiration, and User Profile metadata.
 
 ---
 
-### 3. ⚖️ Automated Underwriting & Risk Assessment Call Chain (UI/API → DB)
-
-```text
-[ Underwriter Portal / Rest Client ]
-           │
-           │  HTTP POST /api/v1/underwriting/assess
-           ▼
-[ API Gateway (Port 8080) ]
-           │  (Dispatches route to UNDERWRITING-SERVICE)
-           ▼
-[ UnderwritingController.java ]  (com.freddieapp.underwriting.controller)
-   └── method: assessLoan(@Valid @RequestBody UnderwritingRequest request)
-           │
-           ▼
-[ UnderwritingEngine.java ]  (com.freddieapp.underwriting.service)
-   └── method: assessLoan(UnderwritingRequest request)
-           │
-           ├──► [ UnderwritingRuleProcessor.java ]  (com.freddieapp.underwriting.processor)
-           │       ├── method: calculateDti(monthlyIncome, monthlyDebt)
-           │       ├── method: calculateLtv(loanAmount, propertyValue)
-           │       └── method: evaluateRiskTier(creditScore, dti, ltv) 
-           │               └── Returns: Decision (APPROVED/DECLINED/REFER), RiskLevel (LOW/HIGH)
-           │
-           ├──► [ UnderwritingSpecification.java ]  (com.freddieapp.underwriting.specification)
-           │       └── method: isAutoApproveEligible(RiskLevel.LOW)
-           │
-           ├──► [ UnderwritingAssessmentRepository.java ]  (com.freddieapp.underwriting.repository)
-           │       └── method: saveNativeAssessment(...)  or  save(UnderwritingAssessment)
-           │               │
-           │               ▼  (Native SQL Execution)
-           │       INSERT INTO underwriting_assessments 
-           │       (assessment_id, loan_id, customer_id, credit_score, dti_ratio, ltv_ratio, decision, risk_level)
-           │       VALUES (:assessmentId, :loanId, :customerId, :creditScore, :dti, :ltv, :decision, :riskLevel)
-           │               │
-           │               ▼  (Database Table Target)
-           │       PostgreSQL Database (`freddie_loans` DB) -> Table: `underwriting_assessments`
-           │
-           └──► [ NotificationClient.java ]  (com.freddieapp.underwriting.client.notification)
-                   └── method: notifyUnderwritingDecision(loanId, decision.name())
-```
+### 👤 2.2 Functional Flow 2: Borrower Onboarding & KYC Management (`customer-service`)
+- **Actors**: Borrower, Customer Service Representative.
+- **Workflow**:
+  1. Borrower submits registration profile (First Name, Last Name, SSN, Annual Income, Email).
+  2. Request routes through API Gateway (`/api/v1/customers`) to `customer-service` (Port 8081).
+  3. `CustomerService` checks email uniqueness via `CustomerRepository.existsByEmail()` (Native SQL Query).
+  4. Persists customer entity to PostgreSQL schema `freddie_customer` via `CustomerRepository.save()` (ORM Query).
+  5. Triggers automated KYC verification check (`VERIFIED`, `PENDING_REVERIFICATION`, `EXPIRED`).
+  6. Dispatches welcome email notification to borrower.
 
 ---
 
-### 4. 📄 Document Storage & Management Call Chain (UI → DB)
-
-```text
-[ Browser / Document Upload Form ]
-           │
-           │  HTTP POST /api/v1/documents (Multipart File Stream)
-           ▼
-[ API Gateway (Port 8080) ]
-           │  (Dispatches route to DOCUMENT-SERVICE)
-           ▼
-[ DocumentController.java ]  (com.freddieapp.documentservice.controller)
-   └── method: uploadDocument(loanId, customerId, documentType, filePartMono)
-           │
-           ▼
-[ DocumentService.java ]  (com.freddieapp.documentservice.service)
-   └── method: uploadDocument(loanId, customerId, documentType, filePartMono)
-           │
-           ├──► [ DocumentProcessor.java ]  (com.freddieapp.documentservice.processor)
-           │       └── method: validateMimeType(contentType) & sanitizeFileName(filename)
-           │
-           ├──► [ LoanDocumentRepository.java (R2DBC) ]  (com.freddieapp.documentservice.repository)
-           │       └── method: save(LoanDocument)
-           │               │
-           │               ▼  (Reactive R2DBC SQL Execution)
-           │       INSERT INTO loan_documents (document_id, loan_id, customer_id, document_type, status)
-           │       VALUES ($1, $2, $3, $4, 'UPLOADED')
-           │               │
-           │               ▼  (Database Table Target)
-           │       PostgreSQL Database (`freddie_customer` DB) -> Table: `loan_documents`
-           │
-           └──► [ NotificationClient.java ]  (com.freddieapp.documentservice.client.notification)
-                   └── method: notifyDocumentUploaded(documentId, loanId)
-```
+### 📊 2.3 Functional Flow 3: Real-Time Interest Rate & EMI Pricing (`rate-calculator-service`)
+- **Actors**: Borrower, Loan Officer.
+- **Workflow**:
+  1. Borrower inputs desired Loan Amount, Property Value, Credit Score (FICO), and Term Months.
+  2. Request routes through API Gateway (`/api/v1/rates/calculate`) to `rate-calculator-service` (Port 8086).
+  3. `RateCalculatorService` queries `RateRepository` to determine pricing tier (`PRIME`, `NEAR_PRIME`, `NON_PRIME`, `SUBPRIME`).
+  4. Calculates:
+     - **Base Benchmark Rate**: e.g., 6.25%
+     - **Credit Score Adjustment**: -0.375% (>= 760) to +1.250% (< 660)
+     - **LTV Surcharge**: +0.250% (LTV > 80%) to +0.375% (LTV > 90%)
+     - **Monthly EMI Payment**: $P \times r \times (1+r)^n / ((1+r)^n - 1)$
+  5. Returns detailed breakdown including Total Interest Payable and Pricing Tier classification.
 
 ---
 
-## 🔄 End-to-End Functional Flows
+### 📝 2.4 Functional Flow 4: Loan Origination & Application Lifecycle (`loan-origination-service`)
+- **Actors**: Borrower, Loan Officer.
+- **State Machine Transitions**:
+  ```text
+  [SUBMITTED] ──> [UNDER_REVIEW] ──> [APPROVED] ──> [DISBURSED]
+                                └──> [REJECTED]
+  ```
+- **Workflow**:
+  1. Borrower creates a new loan application on the Loan Portal (`loan-frontend-service` - Port 8088).
+  2. Request routes through API Gateway (`/api/v1/loans`) to `loan-origination-service` (Port 8082).
+  3. `LoanOriginationService` persists application record via `LoanApplicationRepository.save()` (ORM Query).
+  4. Executes PostgreSQL Native UPDATE query `submitForUnderwritingNative(loanId)` to transition loan status to `UNDER_REVIEW`.
+  5. Dispatches transactional email alert confirming application submission.
 
-### Flow 1: User Authentication & Login Portal Flow
+---
+
+### 🛡️ 2.5 Functional Flow 5: Automated Underwriting, Risk Scoring & Amortization (`underwriting-service`)
+- **Actors**: Automated Underwriting System, Senior Underwriter.
+- **Workflow**:
+  1. Underwriting request triggered via API Gateway (`/api/v1/underwriting/assess`) to `underwriting-service` (Port 8083).
+  2. `UnderwritingEngine` invokes legacy credit verification client to retrieve bureau reference and score.
+  3. Calculates financial ratios:
+     - **DTI Ratio**: $(\text{Monthly Debt} / \text{Monthly Income}) \times 100$
+     - **LTV Ratio**: $(\text{Loan Amount} / \text{Property Value}) \times 100$
+  4. Evaluates Java 21 pattern-matching decision rules:
+     - **APPROVED**: FICO >= 680, DTI <= 43%, LTV <= 80%.
+     - **REFERRED**: Elevated risk indicators requiring manual underwriter override.
+     - **DECLINED**: Exceeds critical risk thresholds (FICO < 600 or DTI > 50%).
+  5. Generates Loan-Level Price Adjustments (LLPA), PMI rates, and full **360-month amortization schedule**.
+  6. Persists assessment via `UnderwritingAssessmentRepository.save()` (ORM Query) and updates status via `recordDecisionNative` (Native Query).
+  7. **Manual Override Sub-Flow**: Senior Underwriter calls `/override/{assessmentId}`. `UnderwritingEngine.overrideDecision()` records audited underwriter decision and reasoning in DB.
+
+---
+
+### 📁 2.6 Functional Flow 6: Reactive Document Upload & Processing (`document-service`)
+- **Actors**: Borrower, Loan Officer.
+- **Workflow**:
+  1. Borrower uploads W-2 forms, pay stubs, or property appraisal documents.
+  2. Request routes through API Gateway (`/api/v1/documents`) to `document-service` (Port 8084).
+  3. `DocumentController` handles multipart file flux reactively via Spring WebFlux.
+  4. `DocumentService` indexes document metadata in PostgreSQL schema via R2DBC reactive repository.
+  5. Dispatches email confirmation notification upon successful upload completion.
+
+
+---
+
+## 3. 🔗 Complete Call Chain: UI to Database
+
+Every user request follows a strict, end-to-end call chain starting at the UI Frontend down to the relational database persistence layer:
+
+### 📊 Visual Call Chain Sequence Diagram
+
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as Borrower / Loan Officer
-    participant LoginUI as Login Frontend (8086)
+    participant UI as UI Frontend (8087 / 8088)
     participant Gateway as API Gateway (8080)
-    participant Auth as Auth Service (8085)
-    participant UserDB as User Account DB (PostgreSQL)
+    participant Controller as REST Controller (@RestController)
+    participant Service as Business Service (@Service)
+    participant Email as Email Notification Servicer
+    participant Repo as Repository Layer (@Repository)
+    participant DB as PostgreSQL Database
 
-    User->>LoginUI: Open Login Portal & Submit Credentials
-    LoginUI->>Gateway: POST /api/v1/auth/login
-    Gateway->>Auth: Forward Authentication Request
-    Auth->>UserDB: Execute Native Query (Find User Account & Role)
-    UserDB-->>Auth: User Entity Record
-    Auth->>Auth: TokenProcessor (Validate Password & Generate JWT)
-    Auth->>Auth: NotificationClient (Log Audit Event)
-    Auth-->>Gateway: TokenResponse (JWT Token, User Roles, Expiration)
-    Gateway-->>LoginUI: HTTP 200 OK + JWT Bearer Token
-    LoginUI-->>User: Redirect to User Dashboard
+    User->>UI: Submit Action (e.g. Create Loan Application)
+    UI->>Gateway: POST /api/v1/loans (Include Bearer JWT Token)
+    Gateway->>Gateway: Validate JWT & Route Request
+    Gateway->>Controller: Delegate Request to Microservice Controller
+    Controller->>Controller: Sanitize Input (@InitBinder) & Validate Payload (@Valid)
+    Controller->>Service: Invoke Business Logic Method
+    Service->>Service: Perform Business Calculations & Rules Engine
+    Service->>Email: Trigger Event Notification (sendEmailNotification)
+    Service->>Repo: Perform Persistence Request
+    alt ORM Query Path
+        Repo->>DB: Execute Spring Data JPA ORM Query (e.g. save, findById)
+    else Native SQL Query Path
+        Repo->>DB: Execute PostgreSQL Native Query (@Query(nativeQuery = true))
+    end
+    DB-->>Repo: Return Query Results / Updated Rows
+    Repo-->>Service: Return Entity / Native Result Projections
+    Service-->>Controller: Return Business Response DTO
+    Controller-->>Gateway: Return ResponseEntity<DTO> (201 Created / 200 OK)
+    Gateway-->>UI: Forward JSON Response Payload
+    UI-->>User: Render Updated UI Dashboard View
+```
+
+### 📝 Step-by-Step Call Chain Trace
+
+| Step | Component | Layer | Functionality / Responsibilities |
+| :---: | :--- | :--- | :--- |
+| **1** | **User Interface** | Frontend (`login-frontend` / `loan-frontend`) | Captures user inputs, builds JSON request payloads, and attaches Bearer OAuth2/JWT header. |
+| **2** | **API Gateway** | Edge Routing (`api-gateway` - Port 8080) | Inspects incoming request headers, validates security token, and routes traffic via Eureka service ID lookup. |
+| **3** | **REST Controller** | Controller (`@RestController`) | Receives payload, applies `@InitBinder` security sanitization, checks Jakarta `@Valid` constraints, and delegates to Service. |
+| **4** | **Business Service** | Service (`@Service`) | Executes domain rules, computes risk metrics, manages `@Transactional` boundaries, and dispatches transactional emails. |
+| **5** | **Email Notification** | Messaging Servicer | Asynchronously queues transactional email alerts (e.g. loan submission, underwriting assessment alerts). |
+| **6** | **Repository** | Repository (`@Repository`) | Data access abstraction executing ORM entities or Native SQL queries (`@Query(nativeQuery = true)`). |
+| **7** | **PostgreSQL Database** | Data Persistence Layer | Stores application records in PostgreSQL schema (`freddie_loans`, `freddie_customer`). |
+
+---
+
+## 4. 📐 Microservice Design Pattern: Controller -> Service -> Repository
+
+All 6 backend microservices strictly enforce the `Controller -> Service -> Repository (With ORM & Native Query)` pattern:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        REST Controller Layer                           │
+│   • REST Endpoints (@RestController)                                   │
+│   • Mass-Assignment Protection (@InitBinder disallowFields)            │
+│   • OpenAPI Swagger Annotations (@Operation, @ApiResponses)            │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                          Business Service Layer                        │
+│   • Business rules, risk algorithms, & financial calculations          │
+│   • Event Email Notifications (EmailNotificationClientServicer)        │
+│   • Transactional boundary management (@Transactional)                 │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                         Repository Data Layer                          │
+│   • Data Access Abstraction (@Repository)                              │
+│   • Spring Data ORM Methods (e.g. findByCustomerId)                    │
+│   • Native SQL Queries (@Query(value = "...", nativeQuery = true))     │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Flow 2: Customer Intake & KYC Verification Flow
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Officer as Loan Officer / Borrower
-    participant Gateway as API Gateway (8080)
-    participant CustomerService as Customer Service (8081)
-    participant SsnCrypto as SSN Encryption Service
-    participant CustDB as Customer DB (PostgreSQL)
+## 5. 🚀 Microservice Modules & Network Ports
 
-    Officer->>Gateway: POST /api/v1/customers (Customer Profile Payload)
-    Gateway->>CustomerService: Create Customer Record
-    CustomerService->>SsnCrypto: Encrypt Sensitive SSN (AES-256)
-    CustomerService->>CustDB: Native Query / JPA Save (Set Status=ACTIVE, KYC=PENDING)
-    CustDB-->>CustomerService: Saved Customer Record
-    CustomerService->>CustomerService: Publish Customer Created Event
-    CustomerService-->>Gateway: CustomerResponse (ID, Masked Details)
-    Gateway-->>Officer: HTTP 201 Created
+| Module Name | Port | Description | Primary Technology |
+| :--- | :---: | :--- | :--- |
+| **`eureka-server`** | `8761` | Service Registry & Discovery Server | Spring Cloud Netflix Eureka |
+| **`api-gateway`** | `8080` | Central Edge Routing & Load Balancer | Spring Cloud Gateway, Netty |
+| **`auth-service`** | `8085` | OAuth2 Authentication & JWT Issuance | Spring Security, JJWT, Java 21 |
+| **`customer-service`** | `8081` | Borrower Profiles & KYC Management | Spring Boot, Spring Data JPA, PostgreSQL |
+| **`loan-origination-service`** | `8082` | Loan Pipeline & Lifecycle Origination | Spring Boot, Hibernate, PostgreSQL |
+| **`underwriting-service`** | `8083` | Automated Underwriting & Risk Engine | Spring Boot, Java 21 Switch Expressions |
+| **`document-service`** | `8084` | Reactive Document Storage & Processing | Spring WebFlux, R2DBC, PostgreSQL |
+| **`rate-calculator-service`** | `8086` | Real-time Rate & EMI Price Calculator | Spring Boot, Math Engine |
+| **`login-frontend-service`** | `8087` | Authentication Portal Web UI | Spring Web MVC, HTML5 |
+| **`loan-frontend-service`** | `8088` | Borrower & Officer Dashboard UI | Spring Web MVC, Vanilla CSS, JS |
+
+---
+
+## 6. 💻 Technology Stack
+
+- **Java**: Java 21 LTS (Record patterns, switch expressions, sequenced collections)
+- **Framework**: Spring Boot 3.3.0, Spring Cloud 2023.0.1
+- **Database / Persistence**: PostgreSQL, Spring Data JPA / Hibernate, Spring Data R2DBC (Reactive)
+- **Security**: OAuth2, Spring Security, JWT (JSON Web Tokens)
+- **API Documentation**: OpenAPI 3.0 / Swagger UI (`springdoc-openapi-starter-webmvc-ui`)
+- **Messaging**: Email Notification Client Service (`EmailNotificationClientServicer`)
+- **Build Tool**: Apache Maven (Multi-module project structure)
+
+---
+
+## 7. 🛠️ Local Environment Setup & Application Run Guide
+
+Follow these step-by-step instructions to set up the environment, prepare data persistence, compile all modules, and run the Freddie Mac Home Loan Platform on your local workstation.
+
+---
+
+### 📋 7.1 Prerequisites
+
+Before starting, ensure the following software dependencies are installed and available on your system path:
+
+| Tool / Runtime | Required Version | Verification Command | Description |
+| :--- | :---: | :--- | :--- |
+| **Java Development Kit (JDK)** | `Java 21 LTS` | `java -version` | Primary runtime environment. |
+| **Apache Maven** | `3.8.x` or higher | `mvn -version` | Build tool & dependency management. |
+| **PostgreSQL Database** | `15.0` or higher | `psql -V` | Relational data persistence database. |
+| **Git** | `2.x` | `git --version` | Source control management. |
+
+---
+
+### 🗄️ 7.2 Database Setup & Initialization
+
+The platform uses two PostgreSQL schemas: `freddie_customer` and `freddie_loans`.
+
+1. **Start PostgreSQL Service**:
+   Ensure PostgreSQL is running locally on default port `5432` with username `postgres` and password `postgres` (or adjust `application.yml` properties accordingly).
+
+2. **Create Schemas**:
+   Open psql or your preferred SQL editor (e.g. DBeaver, pgAdmin) and execute:
+   ```sql
+   CREATE DATABASE freddiedb;
+   \c freddiedb;
+
+   CREATE SCHEMA IF NOT EXISTS freddie_customer;
+   CREATE SCHEMA IF NOT EXISTS freddie_loans;
+   ```
+   *(Note: The microservices will automatically auto-create required tables and partial indexes on startup via Hibernate DDL auto).*
+
+---
+
+### 📦 7.3 Build the Workspace
+
+Compile the complete multi-module project from the root folder:
+
+1. **Clean and Install All Modules**:
+   ```powershell
+   mvn clean install
+   ```
+
+2. **Run Full Test Suite**:
+   Verify unit and integration tests across all 11 microservices:
+   ```powershell
+   mvn test
+   ```
+
+---
+
+### 🚀 7.4 Running the Application (Step-by-Step Execution Order)
+
+Due to microservice dependencies, launch the services in the following sequential order:
+
+#### Step 1: Start Eureka Service Discovery (Port 8761)
+Open a new terminal tab/window:
+```powershell
+cd eureka-server
+mvn spring-boot:run
+```
+> 🔍 **Verification**: Open browser at `http://localhost:8761` to view the Netflix Eureka Discovery Dashboard.
+
+#### Step 2: Start API Gateway (Port 8080)
+Open a new terminal tab/window:
+```powershell
+cd api-gateway
+mvn spring-boot:run
+```
+> 🔍 **Verification**: Check gateway health endpoint at `http://localhost:8080/actuator/health`.
+
+#### Step 3: Start Backend Core Microservices
+Launch each service in a separate terminal window:
+
+- **Auth Service (Port 8085)**:
+  ```powershell
+  cd auth-service; mvn spring-boot:run
+  ```
+- **Customer Service (Port 8081)**:
+  ```powershell
+  cd customer-service; mvn spring-boot:run
+  ```
+- **Loan Origination Service (Port 8082)**:
+  ```powershell
+  cd loan-origination-service; mvn spring-boot:run
+  ```
+- **Underwriting Service (Port 8083)**:
+  ```powershell
+  cd underwriting-service; mvn spring-boot:run
+  ```
+- **Document Service (Port 8084)**:
+  ```powershell
+  cd document-service; mvn spring-boot:run
+  ```
+- **Rate Calculator Service (Port 8086)**:
+  ```powershell
+  cd rate-calculator-service; mvn spring-boot:run
+  ```
+
+#### Step 4: Start Frontend Microservices
+- **Login Frontend Service (Port 8087)**:
+  ```powershell
+  cd login-frontend-service; mvn spring-boot:run
+  ```
+- **Loan Frontend Service (Port 8088)**:
+  ```powershell
+  cd loan-frontend-service; mvn spring-boot:run
+  ```
+
+---
+
+### ⚡ 7.5 Quick-Start Single-Line Scripts
+
+#### PowerShell (Windows):
+To launch all services automatically in separate background windows:
+```powershell
+Start-Process powershell -ArgumentList "-NoExit -Command cd eureka-server; mvn spring-boot:run"
+Start-Sleep -Seconds 12
+Start-Process powershell -ArgumentList "-NoExit -Command cd api-gateway; mvn spring-boot:run"
+Start-Sleep -Seconds 8
+Start-Process powershell -ArgumentList "-NoExit -Command cd auth-service; mvn spring-boot:run"
+Start-Process powershell -ArgumentList "-NoExit -Command cd customer-service; mvn spring-boot:run"
+Start-Process powershell -ArgumentList "-NoExit -Command cd loan-origination-service; mvn spring-boot:run"
+Start-Process powershell -ArgumentList "-NoExit -Command cd underwriting-service; mvn spring-boot:run"
+Start-Process powershell -ArgumentList "-NoExit -Command cd document-service; mvn spring-boot:run"
+Start-Process powershell -ArgumentList "-NoExit -Command cd rate-calculator-service; mvn spring-boot:run"
+Start-Process powershell -ArgumentList "-NoExit -Command cd login-frontend-service; mvn spring-boot:run"
+Start-Process powershell -ArgumentList "-NoExit -Command cd loan-frontend-service; mvn spring-boot:run"
 ```
 
 ---
 
-### Flow 3: Mortgage Rate Calculation & Application Submission Flow
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Borrower
-    participant LoanUI as Loan Frontend Portal (8087)
-    participant Gateway as API Gateway (8080)
-    participant RateCalc as Rate Calculator Service (8088)
-    participant Origination as Loan Origination Service (8082)
-    participant CustService as Customer Service (8081)
-    participant LoanDB as Loan Application DB (PostgreSQL)
+### 🔍 7.6 Verification & Testing Local Setup
 
-    Borrower->>LoanUI: Enter Loan Amount, Property Value & Credit Score
-    LoanUI->>Gateway: POST /api/v1/rates/calculate
-    Gateway->>RateCalc: Calculate Rate & EMI
-    RateCalc->>RateCalc: RateCalculationProcessor (Calculate Base Rate, LTV & Tier)
-    RateCalc-->>LoanUI: Rate calculation response (Interest Rate, EMI, Total Interest)
-
-    Borrower->>LoanUI: Click Submit Application
-    LoanUI->>Gateway: POST /api/v1/loans
-    Gateway->>Origination: Submit Application Request
-    Origination->>CustService: Feign Client -> Verify Customer Active Status
-    CustService-->>Origination: Customer Verification OK
-    Origination->>LoanDB: Native Query Save (LoanStatus = SUBMITTED)
-    Origination-->>Gateway: Loan Application Response
-    Gateway-->>LoanUI: HTTP 201 Created (Loan ID Generated)
-```
+1. **Eureka Registry Check**: Access `http://localhost:8761` — verify all 10 registered instances show status `UP`.
+2. **Access Web Portals**:
+   - **Login Portal**: `http://localhost:8087`
+   - **Loan Management Dashboard**: `http://localhost:8088`
+3. **Pre-configured Test Credentials**:
+   - `admin` / `admin123` (System Administrator / All Roles)
+   - `officer` / `officer123` (Loan Officer)
+   - `underwriter` / `underwriter123` (Senior Underwriter)
+   - `customer` / `customer123` (Borrower)
 
 ---
 
-### Flow 4: Automated Underwriting & Risk Assessment Flow
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Underwriter as Underwriter / Automated Engine
-    participant Gateway as API Gateway (8080)
-    participant Underwriting as Underwriting Engine (8083)
-    participant RuleEngine as Underwriting Rule Processor
-    participant UWDB as Underwriting Repository (PostgreSQL)
+## 8. 🌐 Swagger API Documentation
 
-    Underwriter->>Gateway: POST /api/v1/underwriting/assess (LoanID, DTI, CreditScore)
-    Gateway->>Underwriting: Assess Risk & Generate Decision
-    Underwriting->>RuleEngine: Evaluate DTI, Credit Score & LTV Rules
-    RuleEngine-->>Underwriting: Decision (APPROVED / CONDITIONALLY_APPROVED / DECLINED / REFER) & RiskLevel
-    Underwriting->>Underwriting: Compute Amortization Schedule
-    Underwriting->>UWDB: Insert Native Query (Save Assessment Record)
-    Underwriting->>Underwriting: NotificationClient (Send Underwriting Alert)
-    Underwriting-->>Gateway: UnderwritingResponse Payload
-    Gateway-->>Underwriter: HTTP 201 Created + Detailed Risk Metrics
-```
+Interactive OpenAPI Swagger UI portals are accessible at:
+- **API Gateway**: `http://localhost:8080/swagger-ui.html`
+- **Auth Service**: `http://localhost:8085/swagger-ui.html`
+- **Customer Service**: `http://localhost:8081/swagger-ui.html`
+- **Loan Origination Service**: `http://localhost:8082/swagger-ui.html`
+- **Underwriting Service**: `http://localhost:8083/swagger-ui.html`
+- **Document Service**: `http://localhost:8084/swagger-ui.html`
+- **Rate Calculator Service**: `http://localhost:8086/swagger-ui.html`
 
 ---
 
-### Flow 5: Document Upload & Storage Verification Flow
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Borrower
-    participant Gateway as API Gateway (8080)
-    participant DocService as Document Service (8084)
-    participant R2dbcDB as Document Reactive DB (PostgreSQL R2DBC)
+## 9. 🧪 Verification & Build Status
 
-    Borrower->>Gateway: POST /api/v1/documents (Multipart File: W2 / Paystub)
-    Gateway->>DocService: Forward Reactive Upload Stream
-    DocService->>DocService: Read DataBuffer & Construct LoanDocument
-    DocService->>R2dbcDB: Reactive Save Document Metadata (Status = UPLOADED)
-    R2dbcDB-->>DocService: Saved Entity Mono
-    DocService->>DocService: NotificationClient (Log Document Uploaded)
-    DocService-->>Gateway: LoanDocument Response Mono
-    Gateway-->>Borrower: HTTP 201 Created (Document Metadata ID)
-```
-
----
-
-## 🛠️ Build & Verification
-
-### Build Entire Platform Multi-Module Reactor
-```bash
-mvn clean package -DskipTests
-```
-
-### Run Full Test Suite Across All Modules
-```bash
-mvn clean test
-```
-
-### Running Locally with Spring Boot
-Start the key infrastructure and database services, then launch individual microservices:
-```bash
-# 1. Start Service Registry
-cd eureka-server && mvn spring-boot:run
-
-# 2. Start API Gateway
-cd api-gateway && mvn spring-boot:run
-
-# 3. Start Core Domain Services
-cd auth-service && mvn spring-boot:run
-cd customer-service && mvn spring-boot:run
-cd loan-origination-service && mvn spring-boot:run
-cd underwriting-service && mvn spring-boot:run
-cd document-service && mvn spring-boot:run
-cd rate-calculator-service && mvn spring-boot:run
-cd login-frontend-service && mvn spring-boot:run
-cd loan-frontend-service && mvn spring-boot:run
+```text
+[INFO] Reactor Summary for Freddie Mac-Style Home Loan Platform 1.0.0-SNAPSHOT:
+[INFO] 
+[INFO] Freddie Mac-Style Home Loan Platform ............... SUCCESS
+[INFO] eureka-server ...................................... SUCCESS
+[INFO] api-gateway ........................................ SUCCESS
+[INFO] auth-service ....................................... SUCCESS
+[INFO] customer-service ................................... SUCCESS
+[INFO] loan-origination-service ........................... SUCCESS
+[INFO] underwriting-service ............................... SUCCESS
+[INFO] document-service ................................... SUCCESS
+[INFO] login-frontend-service ............................. SUCCESS
+[INFO] loan-frontend-service .............................. SUCCESS
+[INFO] rate-calculator-service ............................ SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
 ```

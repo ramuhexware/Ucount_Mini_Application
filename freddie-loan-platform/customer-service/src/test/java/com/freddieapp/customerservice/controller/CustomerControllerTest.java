@@ -29,6 +29,12 @@ public class CustomerControllerTest {
     @Mock
     private CardSyncClient cardSyncClient;
 
+    @Mock
+    private com.freddieapp.customerservice.service.EmailNotificationClientServicer emailNotificationClientServicer;
+
+    @Mock
+    private com.freddieapp.customerservice.config.EmailNotificationClientConfig emailNotificationClientConfig;
+
     @InjectMocks
     private CustomerController customerController;
 

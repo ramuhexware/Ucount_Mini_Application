@@ -1,91 +1,138 @@
 package com.freddieapp.underwriting.controller;
 
+import com.freddieapp.underwriting.config.EmailNotificationClientConfig;
 import com.freddieapp.underwriting.dto.UnderwritingRequest;
 import com.freddieapp.underwriting.dto.UnderwritingResponse;
 import com.freddieapp.underwriting.enums.Decision;
-import com.freddieapp.underwriting.repository.UnderwritingAssessmentRepository;
+import com.freddieapp.underwriting.service.EmailNotificationClientServicer;
 import com.freddieapp.underwriting.service.UnderwritingEngine;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.*;
 
-@Slf4j
 @RestController
 @RequestMapping("/api/v1/underwriting")
-@RequiredArgsConstructor
 @Tag(name = "Underwriting & Risk", description = "Risk assessment engines and compliance evaluation APIs")
 public class UnderwritingController {
 
-    private final UnderwritingEngine underwritingEngine;
-    private final UnderwritingAssessmentRepository assessmentRepository;
+    private static final Logger LOGGER = LoggerFactory.getLogger(UnderwritingController.class);
 
-    @PostMapping("/assess")
-    @Operation(summary = "Execute automated underwriting assessment rules")
-    public ResponseEntity<UnderwritingResponse> assessLoan(@Valid @RequestBody UnderwritingRequest request) {
-        log.info("REST request to evaluate underwriting rules for loanId={}", request.getLoanId());
-        return ResponseEntity.status(HttpStatus.CREATED).body(underwritingEngine.assessLoan(request));
+    private final UnderwritingEngine underwritingEngine;
+
+    @Autowired
+    EmailNotificationClientServicer emailNotificationClientServicer;
+
+    @Autowired
+    EmailNotificationClientConfig emailNotificationClientConfig;
+
+    @Value("${bypassPingAuth:false}")
+    private String bypassPingAuth;
+
+    @Autowired
+    public UnderwritingController(UnderwritingEngine underwritingEngine) {
+        this.underwritingEngine = underwritingEngine;
     }
 
-    @PostMapping("/override/{assessmentId}")
-    @PreAuthorize("hasRole('UNDERWRITER')")
+    @InitBinder
+    public void initBinder(WebDataBinder binder) {
+        binder.setDisallowedFields();
+    }
+
+    @Operation(summary = "Execute automated underwriting assessment rules")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "OK"),
+        @ApiResponse(responseCode = "400", description = "Bad Request"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "500", description = "Internal Server Error") })
+    @PostMapping(value = "/assess", consumes = "application/json", produces = "application/json")
+    @ResponseStatus(HttpStatus.CREATED)
+    public @ResponseBody ResponseEntity<UnderwritingResponse> assessLoan(@Valid @RequestBody UnderwritingRequest request) {
+        LOGGER.info("OrgAPI: Assess Loan Underwriting...");
+        UnderwritingResponse response = underwritingEngine.assessLoan(request);
+        if (emailNotificationClientServicer != null) {
+            emailNotificationClientServicer.sendEmailNotification("underwriting-alerts@freddiemac.com", 
+                    "Underwriting Assessment Complete", "Assessment ID " + response.getAssessmentId() + " decision: " + response.getDecision());
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
     @Operation(summary = "Manual underwriting decision override (Audited)")
-    public ResponseEntity<UnderwritingResponse> overrideDecision(
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "OK"),
+        @ApiResponse(responseCode = "400", description = "Bad Request"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "500", description = "Internal Server Error") })
+    @PostMapping(value = "/override/{assessmentId}", produces = "application/json")
+    @PreAuthorize("hasRole('UNDERWRITER')")
+    @ResponseStatus(HttpStatus.OK)
+    public @ResponseBody ResponseEntity<UnderwritingResponse> overrideDecision(
             @PathVariable String assessmentId,
             @RequestParam Decision decision,
             @RequestParam String reason,
             @RequestParam String underwriter) {
-        log.info("REST request to manually override assessmentId={} to decision={}", assessmentId, decision);
-        return ResponseEntity.ok(underwritingEngine.overrideDecision(assessmentId, decision, reason, underwriter));
+        LOGGER.info("OrgAPI: Override Underwriting Decision...");
+        UnderwritingResponse response = underwritingEngine.overrideDecision(assessmentId, decision, reason, underwriter);
+        if (emailNotificationClientServicer != null) {
+            emailNotificationClientServicer.sendEmailNotification("compliance@freddiemac.com", 
+                    "Underwriting Decision Override", "Assessment ID " + assessmentId + " overridden by " + underwriter);
+        }
+        return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/loan/{loanId}")
     @Operation(summary = "Get latest risk assessment by loan ID")
-    public ResponseEntity<UnderwritingResponse> getLatestAssessment(@PathVariable String loanId) {
-        return assessmentRepository.findLatestByLoanIdNative(loanId)
-                .map(this::toResponse)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "OK"),
+        @ApiResponse(responseCode = "400", description = "Bad Request"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "500", description = "Internal Server Error") })
+    @GetMapping(value = "/loan/{loanId}", produces = "application/json")
+    @ResponseStatus(HttpStatus.OK)
+    public @ResponseBody ResponseEntity<UnderwritingResponse> getLatestAssessment(@PathVariable String loanId) {
+        LOGGER.info("OrgAPI: Get Latest Assessment...");
+        UnderwritingResponse response = underwritingEngine.getLatestAssessment(loanId);
+        return response != null ? ResponseEntity.ok(response) : ResponseEntity.notFound().build();
     }
 
-    @GetMapping("/customer/{customerId}")
     @Operation(summary = "Get all historical assessments for a customer")
-    public ResponseEntity<Page<UnderwritingResponse>> getCustomerAssessments(
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "OK"),
+        @ApiResponse(responseCode = "400", description = "Bad Request"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "500", description = "Internal Server Error") })
+    @GetMapping(value = "/customer/{customerId}", produces = "application/json")
+    @ResponseStatus(HttpStatus.OK)
+    public @ResponseBody ResponseEntity<Page<UnderwritingResponse>> getCustomerAssessments(
             @PathVariable String customerId, Pageable pageable) {
-        Page<UnderwritingResponse> page = assessmentRepository.findByCustomerIdNative(customerId, pageable)
-                .map(this::toResponse);
+        LOGGER.info("OrgAPI: Get Customer Assessments...");
+        Page<UnderwritingResponse> page = underwritingEngine.getCustomerAssessments(customerId, pageable);
         return ResponseEntity.ok(page);
     }
 
-    @GetMapping
     @Operation(summary = "Get all underwriting assessments (paginated)")
-    public ResponseEntity<Page<UnderwritingResponse>> getAllAssessments(Pageable pageable) {
-        Page<UnderwritingResponse> page = assessmentRepository.findAll(pageable)
-                .map(this::toResponse);
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "OK"),
+        @ApiResponse(responseCode = "400", description = "Bad Request"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "500", description = "Internal Server Error") })
+    @GetMapping(produces = "application/json")
+    @ResponseStatus(HttpStatus.OK)
+    public @ResponseBody ResponseEntity<Page<UnderwritingResponse>> getAllAssessments(Pageable pageable) {
+        LOGGER.info("OrgAPI: Get All Assessments...");
+        Page<UnderwritingResponse> page = underwritingEngine.getAllAssessments(pageable);
         return ResponseEntity.ok(page);
-    }
-
-    private UnderwritingResponse toResponse(com.freddieapp.underwriting.entity.UnderwritingAssessment assessment) {
-        return UnderwritingResponse.builder()
-                .assessmentId(assessment.getAssessmentId())
-                .loanId(assessment.getLoanId())
-                .customerId(assessment.getCustomerId())
-                .creditScore(assessment.getCreditScore())
-                .dtiRatio(assessment.getDtiRatio())
-                .ltvRatio(assessment.getLtvRatio())
-                .riskLevel(assessment.getRiskLevel())
-                .decision(assessment.getDecision())
-                .decisionReason(assessment.getDecisionReason())
-                .assessedAt(assessment.getAssessedAt())
-                .assessedBy(assessment.getAssessedBy())
-                .bureauReference(assessment.getBureauReference())
-                .build();
     }
 }
+

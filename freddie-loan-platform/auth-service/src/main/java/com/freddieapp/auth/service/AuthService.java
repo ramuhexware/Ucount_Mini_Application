@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthService {
@@ -20,8 +19,6 @@ public class AuthService {
     private final UserRepository userRepository;
     private final TokenProcessor tokenProcessor;
     private final NotificationClient notificationClient;
-    private final Map<String, UserDto> userStore = new ConcurrentHashMap<>();
-    private final Map<String, String> passwordStore = new ConcurrentHashMap<>();
 
     @Autowired
     public AuthService(JwtTokenProvider tokenProvider, UserRepository userRepository, TokenProcessor tokenProcessor, NotificationClient notificationClient) {
@@ -29,40 +26,18 @@ public class AuthService {
         this.userRepository = userRepository;
         this.tokenProcessor = tokenProcessor;
         this.notificationClient = notificationClient;
-        initUsers();
-    }
-
-    private void initUsers() {
-        // Preset users for mortgage platform role-based testing
-        addUser("USR-001", "admin", "admin123", "System Administrator", "admin@freddiemac.com",
-                List.of("ADMIN", "LOAN_OFFICER", "UNDERWRITER", "CUSTOMER"));
-
-        addUser("USR-002", "officer", "officer123", "Sarah Jenkins (Loan Officer)", "officer@freddiemac.com",
-                List.of("LOAN_OFFICER", "CUSTOMER"));
-
-        addUser("USR-003", "underwriter", "underwriter123", "Michael Vance (Senior Underwriter)", "underwriter@freddiemac.com",
-                List.of("UNDERWRITER", "CUSTOMER"));
-
-        addUser("USR-004", "customer", "customer123", "John Doe (Borrower)", "john.doe@example.com",
-                List.of("CUSTOMER"));
-    }
-
-    private void addUser(String id, String username, String password, String fullName, String email, List<String> roles) {
-        UserDto user = UserDto.builder()
-                .id(id)
-                .username(username)
-                .email(email)
-                .fullName(fullName)
-                .roles(roles)
-                .active(true)
-                .build();
-        userStore.put(username, user);
-        passwordStore.put(username, password);
     }
 
     public TokenResponse login(LoginRequest request) {
-        UserDto user = userStore.get(request.getUsername());
-        if (user == null || !request.getPassword().equals(passwordStore.get(request.getUsername()))) {
+        // Query user via UserRepository ORM method
+        UserDto user = userRepository.findUserByUsername(request.getUsername())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
+
+        // Query user password via UserRepository Native Query simulation method
+        String expectedPassword = userRepository.findPasswordByUsernameNative(request.getUsername())
+                .orElse(null);
+
+        if (expectedPassword == null || !request.getPassword().equals(expectedPassword)) {
             throw new IllegalArgumentException("Invalid username or password");
         }
 
@@ -87,11 +62,10 @@ public class AuthService {
             throw new IllegalArgumentException("Invalid or expired token");
         }
         String username = tokenProvider.getUsernameFromToken(token);
-        UserDto user = userStore.get(username);
-        if (user == null) {
-            throw new IllegalArgumentException("User not found");
-        }
-        return user;
+        
+        // Delegate user profile lookup to UserRepository
+        return userRepository.findUserByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
     }
 
     public Map<String, Object> getJwks() {

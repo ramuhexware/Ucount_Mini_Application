@@ -25,6 +25,12 @@ public class RateCalculatorControllerTest {
     @Mock
     private RateCalculatorService rateCalculatorService;
 
+    @Mock
+    private com.freddieapp.ratecalculator.service.EmailNotificationClientServicer emailNotificationClientServicer;
+
+    @Mock
+    private com.freddieapp.ratecalculator.config.EmailNotificationClientConfig emailNotificationClientConfig;
+
     @InjectMocks
     private RateCalculatorController rateCalculatorController;
 

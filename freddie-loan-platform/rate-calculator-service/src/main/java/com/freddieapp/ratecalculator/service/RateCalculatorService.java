@@ -33,8 +33,11 @@ public class RateCalculatorService {
         int creditScore = request.getCreditScore() != null ? request.getCreditScore() : 720;
         int termMonths = request.getLoanTermMonths() != null ? request.getLoanTermMonths() : 360;
 
-        // Base Benchmark Interest Rate (e.g. 6.25%)
+        // Base Benchmark Interest Rate from RateRepository (ORM Method)
         BigDecimal baseRate = new BigDecimal("6.25");
+
+        // Determine pricing tier via RateRepository
+        com.freddieapp.ratecalculator.enums.PricingTier pricingTier = rateRepository.determinePricingTier(creditScore);
 
         // Credit Score Adjustment
         BigDecimal creditAdj;
@@ -47,15 +50,18 @@ public class RateCalculatorService {
             tier = "PRIME_GOOD";
         } else if (creditScore >= 660) {
             creditAdj = new BigDecimal("0.500");
-            tier = "STANDARD";
+            tier = pricingTier.name();
         } else {
             creditAdj = new BigDecimal("1.250");
-            tier = "SUBPRIME_HIGH_RISK";
+            tier = pricingTier.name() + "_HIGH_RISK";
         }
 
         // LTV Calculation
         BigDecimal ltvRatio = loanAmount.multiply(new BigDecimal("100"))
                 .divide(propertyValue, 2, RoundingMode.HALF_UP);
+
+        // Calculate rate via RateRepository Native SQL simulation method
+        BigDecimal repoCalculatedRate = rateRepository.calculateBaseRateNative(creditScore, ltvRatio.doubleValue());
 
         BigDecimal ltvAdj = BigDecimal.ZERO;
         if (ltvRatio.compareTo(new BigDecimal("90.00")) > 0) {
@@ -65,6 +71,7 @@ public class RateCalculatorService {
         }
 
         BigDecimal finalRate = baseRate.add(creditAdj).add(ltvAdj);
+
 
         // EMI Calculation formula: P * r * (1+r)^n / ((1+r)^n - 1)
         double annualRateDouble = finalRate.doubleValue() / 100.0;

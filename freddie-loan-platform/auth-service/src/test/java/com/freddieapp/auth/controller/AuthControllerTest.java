@@ -26,6 +26,12 @@ public class AuthControllerTest {
     @Mock
     private AuthService authService;
 
+    @Mock
+    private com.freddieapp.auth.service.EmailNotificationClientServicer emailNotificationClientServicer;
+
+    @Mock
+    private com.freddieapp.auth.config.EmailNotificationClientConfig emailNotificationClientConfig;
+
     @InjectMocks
     private AuthController authController;
 

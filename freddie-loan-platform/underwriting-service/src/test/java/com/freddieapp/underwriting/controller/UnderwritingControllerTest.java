@@ -28,7 +28,10 @@ public class UnderwritingControllerTest {
     private UnderwritingEngine underwritingEngine;
 
     @Mock
-    private UnderwritingAssessmentRepository assessmentRepository;
+    private com.freddieapp.underwriting.service.EmailNotificationClientServicer emailNotificationClientServicer;
+
+    @Mock
+    private com.freddieapp.underwriting.config.EmailNotificationClientConfig emailNotificationClientConfig;
 
     @InjectMocks
     private UnderwritingController underwritingController;
@@ -83,5 +86,17 @@ public class UnderwritingControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(Decision.APPROVED, response.getBody().getDecision());
     }
+
+    @Test
+    public void testGetLatestAssessmentSuccess() {
+        when(underwritingEngine.getLatestAssessment("LOAN-9001")).thenReturn(mockResponse);
+
+        ResponseEntity<UnderwritingResponse> response = underwritingController.getLatestAssessment("LOAN-9001");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("UW-8801", response.getBody().getAssessmentId());
+    }
 }
+
 
