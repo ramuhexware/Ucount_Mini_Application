@@ -1,14 +1,49 @@
 {
 	"info": {
 		"name": "Freddie Mac Home Loan Platform",
+		"description": "Comprehensive Postman API Collection for the Freddie Mac-Style Home Loan Microservices Platform.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
 		{
-			"name": "1. Customer Management API",
+			"name": "1. Authentication & Security API",
 			"item": [
 				{
-					"name": "Create Customer",
+					"name": "User Login & JWT Generation",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"officer\",\n    \"password\": \"officer123\"\n}"
+						},
+						"url": {
+							"raw": "{{gateway_url}}/api/v1/auth/login",
+							"host": [
+								"{{gateway_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Customer Management API",
+			"item": [
+				{
+					"name": "Create Customer Account",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -109,7 +144,7 @@
 			]
 		},
 		{
-			"name": "2. Loan Origination API",
+			"name": "3. Loan Origination API",
 			"item": [
 				{
 					"name": "Submit Loan Application",
@@ -183,15 +218,24 @@
 			]
 		},
 		{
-			"name": "3. Underwriting Service API",
+			"name": "4. Underwriting Service API",
 			"item": [
 				{
-					"name": "Evaluate Loan Rules",
+					"name": "Assess Loan Underwriting",
 					"request": {
 						"method": "POST",
-						"header": [],
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"loanId\": \"{{loanId}}\",\n    \"customerId\": \"{{customerId}}\",\n    \"applicantIncome\": 120000,\n    \"existingMonthlyDebt\": 1500,\n    \"creditScore\": 750,\n    \"requestedLoanAmount\": 350000,\n    \"propertyValue\": 450000\n}"
+						},
 						"url": {
-							"raw": "{{gateway_url}}/api/v1/underwriting/evaluate/{{loanId}}",
+							"raw": "{{gateway_url}}/api/v1/underwriting/assess",
 							"host": [
 								"{{gateway_url}}"
 							],
@@ -199,8 +243,7 @@
 								"api",
 								"v1",
 								"underwriting",
-								"evaluate",
-								"{{loanId}}"
+								"assess"
 							]
 						}
 					},
@@ -210,18 +253,9 @@
 					"name": "Apply Underwriting Manual Override",
 					"request": {
 						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"decision\": \"APPROVED\",\n    \"remarks\": \"Strong assets and credit scores compensate for DTI margins.\"\n}"
-						},
+						"header": [],
 						"url": {
-							"raw": "{{gateway_url}}/api/v1/underwriting/override/{{loanId}}",
+							"raw": "{{gateway_url}}/api/v1/underwriting/override/{{assessmentId}}?decision=APPROVED&reason=Strong+assets+and+credit+score&underwriter=SeniorOfficer",
 							"host": [
 								"{{gateway_url}}"
 							],
@@ -230,7 +264,21 @@
 								"v1",
 								"underwriting",
 								"override",
-								"{{loanId}}"
+								"{{assessmentId}}"
+							],
+							"query": [
+								{
+									"key": "decision",
+									"value": "APPROVED"
+								},
+								{
+									"key": "reason",
+									"value": "Strong+assets+and+credit+score"
+								},
+								{
+									"key": "underwriter",
+									"value": "SeniorOfficer"
+								}
 							]
 						}
 					},
@@ -239,10 +287,79 @@
 			]
 		},
 		{
-			"name": "4. Appian Integration Service API",
+			"name": "5. Document Management API",
 			"item": [
 				{
-					"name": "Appian Loan Intake",
+					"name": "Upload Loan Document",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "loanId",
+									"value": "{{loanId}}",
+									"type": "text"
+								},
+								{
+									"key": "customerId",
+									"value": "{{customerId}}",
+									"type": "text"
+								},
+								{
+									"key": "documentType",
+									"value": "W2_FORM",
+									"type": "text"
+								},
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{gateway_url}}/api/v1/documents",
+							"host": [
+								"{{gateway_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"documents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Document Metadata by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{gateway_url}}/api/v1/documents/{{documentId}}",
+							"host": [
+								"{{gateway_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"documents",
+								"{{documentId}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "6. Rate Calculator API",
+			"item": [
+				{
+					"name": "Calculate Interest Rate & EMI Estimate",
 					"request": {
 						"method": "POST",
 						"header": [
@@ -253,74 +370,38 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"customerId\": \"{{customerId}}\",\n    \"loanType\": \"PURCHASE\",\n    \"loanAmount\": 430000,\n    \"propertyValue\": 560000,\n    \"propertyAddress\": \"988 Maple Ave\",\n    \"loanTermMonths\": 360\n}"
+							"raw": "{\n    \"loanAmount\": 350000,\n    \"propertyValue\": 450000,\n    \"creditScore\": 740,\n    \"loanTermMonths\": 360\n}"
 						},
 						"url": {
-							"raw": "{{gateway_url}}/api/v1/appian/loans",
+							"raw": "{{gateway_url}}/api/v1/rates/calculate",
 							"host": [
 								"{{gateway_url}}"
 							],
 							"path": [
 								"api",
 								"v1",
-								"appian",
-								"loans"
+								"rates",
+								"calculate"
 							]
 						}
 					},
 					"response": []
 				},
 				{
-					"name": "Get Appian Integration Logs",
+					"name": "Rate Calculator Service Health Check",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{gateway_url}}/api/v1/appian/integration-logs?page=0&size=10",
+							"raw": "{{gateway_url}}/api/v1/rates/health",
 							"host": [
 								"{{gateway_url}}"
 							],
 							"path": [
 								"api",
 								"v1",
-								"appian",
-								"integration-logs"
-							],
-							"query": [
-								{
-									"key": "page",
-									"value": "0"
-								},
-								{
-									"key": "size",
-									"value": "10"
-								}
-							]
-						}
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "5. Card Service API",
-			"item": [
-				{
-					"name": "Get Customer Cards",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{gateway_url}}/api/v1/cards/customer/{{customerId}}",
-							"host": [
-								"{{gateway_url}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"cards",
-								"customer",
-								"{{customerId}}"
+								"rates",
+								"health"
 							]
 						}
 					},
@@ -343,6 +424,16 @@
 		{
 			"key": "loanId",
 			"value": "b26002de-6f4a-41f3-9d05-55e1b0686b70",
+			"type": "string"
+		},
+		{
+			"key": "assessmentId",
+			"value": "uw-8892-4410",
+			"type": "string"
+		},
+		{
+			"key": "documentId",
+			"value": "doc-9901-7721",
 			"type": "string"
 		}
 	]

@@ -1,23 +1,24 @@
 # 🏦 Freddie Mac Home Loan Platform (`freddie-loan-platform`)
 
-[![Java 21](https://img.shields.io/badge/Java-21-orange.svg)](https://jdk.java.net/21/)
+[![Java 17](https://img.shields.io/badge/Java-17-orange.svg)](https://jdk.java.net/17/)
 [![Spring Boot 3.3.0](https://img.shields.io/badge/Spring%20Boot-3.3.0-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Cloud 2023.0.1](https://img.shields.io/badge/Spring%20Cloud-2023.0.1-blue.svg)](https://spring.io/projects/spring-cloud)
+[![Angular 15](https://img.shields.io/badge/Angular-15.2.0-red.svg)](https://angular.io/)
 [![License: Enterprise](https://img.shields.io/badge/License-Freddie%20Mac%20Enterprise-red.svg)]()
 
-Welcome to the **Freddie Mac Home Loan Platform** (Ucount Mini Application) — a state-of-the-art enterprise microservices platform built with Java 21, Spring Boot 3.3, and PostgreSQL, designed for end-to-end mortgage origination, credit underwriting, risk assessment, reactive document management, and real-time interest rate pricing.
+Welcome to the **Freddie Mac Home Loan Platform** (Ucount Mini Application) — a single, unified enterprise microservices workspace built with **Angular 15**, **Java 17**, **Spring Boot 3.3**, and **PostgreSQL**, designed for end-to-end mortgage origination, credit underwriting, risk assessment, reactive document management, and real-time interest rate pricing.
 
 ---
 
 ## 1. 🏛️ Architecture of the Application
 
-The application is architected as a cloud-native microservice ecosystem featuring service discovery via **Netflix Eureka**, edge routing and load balancing via **Spring Cloud Gateway**, and dedicated backend microservices powering specific domain bounded contexts.
+The application is architected as a cloud-native microservice ecosystem featuring service discovery via **Netflix Eureka**, edge routing and load balancing via **Spring Cloud Gateway**, Angular 15 web interface, and dedicated backend microservices.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                       UI FRONTEND LAYER                                          │
 │   ┌──────────────────────────────────────────┐    ┌──────────────────────────────────────────┐   │
-│   │   login-frontend-service (Port 8087)     │    │    loan-frontend-service (Port 8088)    │   │
+│   │   Angular 15 Frontend (`/frontend`)      │    │    loan-frontend-service (Port 8088)    │   │
 │   └────────────────────┬─────────────────────┘    └────────────────────┬─────────────────────┘   │
 └────────────────────────┼───────────────────────────────────────────────┼─────────────────────────┘
                          │ (HTTP / REST)                                 │
@@ -110,22 +111,13 @@ flowchart TD
   1. Borrower inputs desired Loan Amount, Property Value, Credit Score (FICO), and Term Months.
   2. Request routes through API Gateway (`/api/v1/rates/calculate`) to `rate-calculator-service` (Port 8086).
   3. `RateCalculatorService` queries `RateRepository` to determine pricing tier (`PRIME`, `NEAR_PRIME`, `NON_PRIME`, `SUBPRIME`).
-  4. Calculates:
-     - **Base Benchmark Rate**: e.g., 6.25%
-     - **Credit Score Adjustment**: -0.375% (>= 760) to +1.250% (< 660)
-     - **LTV Surcharge**: +0.250% (LTV > 80%) to +0.375% (LTV > 90%)
-     - **Monthly EMI Payment**: $P \times r \times (1+r)^n / ((1+r)^n - 1)$
+  4. Calculates Base Benchmark Rate, Credit Score Adjustment, LTV Surcharge, and 30-year monthly EMI.
   5. Returns detailed breakdown including Total Interest Payable and Pricing Tier classification.
 
 ---
 
 ### 📝 2.4 Functional Flow 4: Loan Origination & Application Lifecycle (`loan-origination-service`)
 - **Actors**: Borrower, Loan Officer.
-- **State Machine Transitions**:
-  ```text
-  [SUBMITTED] ──> [UNDER_REVIEW] ──> [APPROVED] ──> [DISBURSED]
-                                └──> [REJECTED]
-  ```
 - **Workflow**:
   1. Borrower creates a new loan application on the Loan Portal (`loan-frontend-service` - Port 8088).
   2. Request routes through API Gateway (`/api/v1/loans`) to `loan-origination-service` (Port 8082).
@@ -139,43 +131,31 @@ flowchart TD
 - **Actors**: Automated Underwriting System, Senior Underwriter.
 - **Workflow**:
   1. Underwriting request triggered via API Gateway (`/api/v1/underwriting/assess`) to `underwriting-service` (Port 8083).
-  2. `UnderwritingEngine` invokes legacy credit verification client to retrieve bureau reference and score.
-  3. Calculates financial ratios:
-     - **DTI Ratio**: $(\text{Monthly Debt} / \text{Monthly Income}) \times 100$
-     - **LTV Ratio**: $(\text{Loan Amount} / \text{Property Value}) \times 100$
-  4. Evaluates Java 21 pattern-matching decision rules:
-     - **APPROVED**: FICO >= 680, DTI <= 43%, LTV <= 80%.
-     - **REFERRED**: Elevated risk indicators requiring manual underwriter override.
-     - **DECLINED**: Exceeds critical risk thresholds (FICO < 600 or DTI > 50%).
-  5. Generates Loan-Level Price Adjustments (LLPA), PMI rates, and full **360-month amortization schedule**.
-  6. Persists assessment via `UnderwritingAssessmentRepository.save()` (ORM Query) and updates status via `recordDecisionNative` (Native Query).
-  7. **Manual Override Sub-Flow**: Senior Underwriter calls `/override/{assessmentId}`. `UnderwritingEngine.overrideDecision()` records audited underwriter decision and reasoning in DB.
+  2. `UnderwritingEngine` calculates DTI and LTV ratios, evaluating Java 17 pattern-matching decision rules (`APPROVED`, `REFERRED`, `DECLINED`).
+  3. Generates Loan-Level Price Adjustments (LLPA), PMI rates, and full 360-month amortization schedule.
+  4. Persists assessment via `UnderwritingAssessmentRepository.save()` (ORM Query) and updates status via `recordDecisionNative` (Native Query).
+  5. Handles Senior Underwriter manual override via `UnderwritingEngine.overrideDecision()`.
 
 ---
 
 ### 📁 2.6 Functional Flow 6: Reactive Document Upload & Processing (`document-service`)
 - **Actors**: Borrower, Loan Officer.
 - **Workflow**:
-  1. Borrower uploads W-2 forms, pay stubs, or property appraisal documents.
+  1. Borrower uploads income or appraisal documents.
   2. Request routes through API Gateway (`/api/v1/documents`) to `document-service` (Port 8084).
   3. `DocumentController` handles multipart file flux reactively via Spring WebFlux.
   4. `DocumentService` indexes document metadata in PostgreSQL schema via R2DBC reactive repository.
-  5. Dispatches email confirmation notification upon successful upload completion.
-
+  5. Dispatches email confirmation notification upon completion.
 
 ---
 
 ## 3. 🔗 Complete Call Chain: UI to Database
 
-Every user request follows a strict, end-to-end call chain starting at the UI Frontend down to the relational database persistence layer:
-
-### 📊 Visual Call Chain Sequence Diagram
-
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as Borrower / Loan Officer
-    participant UI as UI Frontend (8087 / 8088)
+    participant UI as Angular 15 / Web UI (8087/8088/4200)
     participant Gateway as API Gateway (8080)
     participant Controller as REST Controller (@RestController)
     participant Service as Business Service (@Service)
@@ -204,18 +184,6 @@ sequenceDiagram
     Gateway-->>UI: Forward JSON Response Payload
     UI-->>User: Render Updated UI Dashboard View
 ```
-
-### 📝 Step-by-Step Call Chain Trace
-
-| Step | Component | Layer | Functionality / Responsibilities |
-| :---: | :--- | :--- | :--- |
-| **1** | **User Interface** | Frontend (`login-frontend` / `loan-frontend`) | Captures user inputs, builds JSON request payloads, and attaches Bearer OAuth2/JWT header. |
-| **2** | **API Gateway** | Edge Routing (`api-gateway` - Port 8080) | Inspects incoming request headers, validates security token, and routes traffic via Eureka service ID lookup. |
-| **3** | **REST Controller** | Controller (`@RestController`) | Receives payload, applies `@InitBinder` security sanitization, checks Jakarta `@Valid` constraints, and delegates to Service. |
-| **4** | **Business Service** | Service (`@Service`) | Executes domain rules, computes risk metrics, manages `@Transactional` boundaries, and dispatches transactional emails. |
-| **5** | **Email Notification** | Messaging Servicer | Asynchronously queues transactional email alerts (e.g. loan submission, underwriting assessment alerts). |
-| **6** | **Repository** | Repository (`@Repository`) | Data access abstraction executing ORM entities or Native SQL queries (`@Query(nativeQuery = true)`). |
-| **7** | **PostgreSQL Database** | Data Persistence Layer | Stores application records in PostgreSQL schema (`freddie_loans`, `freddie_customer`). |
 
 ---
 
@@ -256,183 +224,97 @@ All 6 backend microservices strictly enforce the `Controller -> Service -> Repos
 | :--- | :---: | :--- | :--- |
 | **`eureka-server`** | `8761` | Service Registry & Discovery Server | Spring Cloud Netflix Eureka |
 | **`api-gateway`** | `8080` | Central Edge Routing & Load Balancer | Spring Cloud Gateway, Netty |
-| **`auth-service`** | `8085` | OAuth2 Authentication & JWT Issuance | Spring Security, JJWT, Java 21 |
+| **`auth-service`** | `8085` | OAuth2 Authentication & JWT Issuance | Spring Security, JJWT, Java 17 |
 | **`customer-service`** | `8081` | Borrower Profiles & KYC Management | Spring Boot, Spring Data JPA, PostgreSQL |
 | **`loan-origination-service`** | `8082` | Loan Pipeline & Lifecycle Origination | Spring Boot, Hibernate, PostgreSQL |
-| **`underwriting-service`** | `8083` | Automated Underwriting & Risk Engine | Spring Boot, Java 21 Switch Expressions |
+| **`underwriting-service`** | `8083` | Automated Underwriting & Risk Engine | Spring Boot, Java 17 Switch Expressions |
 | **`document-service`** | `8084` | Reactive Document Storage & Processing | Spring WebFlux, R2DBC, PostgreSQL |
 | **`rate-calculator-service`** | `8086` | Real-time Rate & EMI Price Calculator | Spring Boot, Math Engine |
 | **`login-frontend-service`** | `8087` | Authentication Portal Web UI | Spring Web MVC, HTML5 |
 | **`loan-frontend-service`** | `8088` | Borrower & Officer Dashboard UI | Spring Web MVC, Vanilla CSS, JS |
+| **`frontend`** | `4200` | Angular 15 Enterprise Portal | Angular 15.2.0, TypeScript 4.9 |
 
 ---
 
-## 6. 💻 Technology Stack
+## 6. 💻 Technology Stack & UCount Project Alignment
 
-- **Java**: Java 21 LTS (Record patterns, switch expressions, sequenced collections)
-- **Framework**: Spring Boot 3.3.0, Spring Cloud 2023.0.1
-- **Database / Persistence**: PostgreSQL, Spring Data JPA / Hibernate, Spring Data R2DBC (Reactive)
-- **Security**: OAuth2, Spring Security, JWT (JSON Web Tokens)
-- **API Documentation**: OpenAPI 3.0 / Swagger UI (`springdoc-openapi-starter-webmvc-ui`)
-- **Messaging**: Email Notification Client Service (`EmailNotificationClientServicer`)
-- **Build Tool**: Apache Maven (Multi-module project structure)
+All microservices adhere strictly to the enterprise **UCount Project** technology specifications:
+
+| Requirement Dimension | Specification | Project Implementation & Compliance Status |
+| :--- | :--- | :--- |
+| **Frontend Framework** | **Angular 15** | ✅ Angular 15.2.0 (`@angular/core`: `^15.2.0`, `@angular/cli`: `^15.2.0`) in `frontend/package.json`. |
+| **Backend Language & Stack** | **Java 17, Spring, Spring Boot 3.x** | ✅ Java 17 LTS (`<java.version>17</java.version>`) & Spring Boot `3.3.0` across all modules. |
+| **Data Access & Queries** | **Spring JPA ORM & Native Query** | ✅ Dual data access layer: Spring Data JPA ORM & High-performance PostgreSQL Native Queries (`@Query(nativeQuery = true)`). |
+| **Database Engine & Objects** | **Postgres DB (2 DBs) - Tables & Views only** | ✅ PostgreSQL databases/schemas (`freddie_customer` & `freddie_loans`). **No Stored Procedures** — clean relational schema using Tables and Views exclusively. |
+| **Unit Testing Framework** | **JUnit 4.x** | ✅ JUnit 4.13.2 with `junit-vintage-engine` test runner across all service test suites. |
+| **Backend Design Pattern** | **`Controller -> Service -> Repository`** | ✅ Architectural pattern: Controllers call Services, Services delegate data access to Repositories (ORM & Native SQL queries). |
 
 ---
 
 ## 7. 🛠️ Local Environment Setup & Application Run Guide
 
-Follow these step-by-step instructions to set up the environment, prepare data persistence, compile all modules, and run the Freddie Mac Home Loan Platform on your local workstation.
-
----
-
 ### 📋 7.1 Prerequisites
-
-Before starting, ensure the following software dependencies are installed and available on your system path:
-
-| Tool / Runtime | Required Version | Verification Command | Description |
-| :--- | :---: | :--- | :--- |
-| **Java Development Kit (JDK)** | `Java 21 LTS` | `java -version` | Primary runtime environment. |
-| **Apache Maven** | `3.8.x` or higher | `mvn -version` | Build tool & dependency management. |
-| **PostgreSQL Database** | `15.0` or higher | `psql -V` | Relational data persistence database. |
-| **Git** | `2.x` | `git --version` | Source control management. |
-
----
+- **Java 17 LTS**: `java -version`
+- **Apache Maven 3.8+**: `mvn -version`
+- **Node.js (18.x) & Angular CLI**: `node -v`, `ng version`
+- **PostgreSQL 15+**: `psql -V`
 
 ### 🗄️ 7.2 Database Setup & Initialization
+The platform uses **2 PostgreSQL databases**: `freddie_customer` and `freddie_loans`.
 
-The platform uses two PostgreSQL schemas: `freddie_customer` and `freddie_loans`.
+```sql
+CREATE DATABASE freddie_customer;
+CREATE DATABASE freddie_loans;
 
-1. **Start PostgreSQL Service**:
-   Ensure PostgreSQL is running locally on default port `5432` with username `postgres` and password `postgres` (or adjust `application.yml` properties accordingly).
+\c freddie_customer;
+CREATE SCHEMA IF NOT EXISTS freddie_customer;
+CREATE SCHEMA IF NOT EXISTS freddie_cards;
 
-2. **Create Schemas**:
-   Open psql or your preferred SQL editor (e.g. DBeaver, pgAdmin) and execute:
-   ```sql
-   CREATE DATABASE freddiedb;
-   \c freddiedb;
-
-   CREATE SCHEMA IF NOT EXISTS freddie_customer;
-   CREATE SCHEMA IF NOT EXISTS freddie_loans;
-   ```
-   *(Note: The microservices will automatically auto-create required tables and partial indexes on startup via Hibernate DDL auto).*
+\c freddie_loans;
+CREATE SCHEMA IF NOT EXISTS freddie_loans;
+CREATE SCHEMA IF NOT EXISTS freddie_uw;
+```
+*(No Stored Procedures — schema strictly consists of Tables and Views).*
 
 ---
 
 ### 📦 7.3 Build the Workspace
 
-Compile the complete multi-module project from the root folder:
-
-1. **Clean and Install All Modules**:
+1. **Build All Java Microservices**:
    ```powershell
    mvn clean install
    ```
 
-2. **Run Full Test Suite**:
-   Verify unit and integration tests across all 11 microservices:
+2. **Run All Backend Tests**:
    ```powershell
    mvn test
    ```
 
----
-
-### 🚀 7.4 Running the Application (Step-by-Step Execution Order)
-
-Due to microservice dependencies, launch the services in the following sequential order:
-
-#### Step 1: Start Eureka Service Discovery (Port 8761)
-Open a new terminal tab/window:
-```powershell
-cd eureka-server
-mvn spring-boot:run
-```
-> 🔍 **Verification**: Open browser at `http://localhost:8761` to view the Netflix Eureka Discovery Dashboard.
-
-#### Step 2: Start API Gateway (Port 8080)
-Open a new terminal tab/window:
-```powershell
-cd api-gateway
-mvn spring-boot:run
-```
-> 🔍 **Verification**: Check gateway health endpoint at `http://localhost:8080/actuator/health`.
-
-#### Step 3: Start Backend Core Microservices
-Launch each service in a separate terminal window:
-
-- **Auth Service (Port 8085)**:
-  ```powershell
-  cd auth-service; mvn spring-boot:run
-  ```
-- **Customer Service (Port 8081)**:
-  ```powershell
-  cd customer-service; mvn spring-boot:run
-  ```
-- **Loan Origination Service (Port 8082)**:
-  ```powershell
-  cd loan-origination-service; mvn spring-boot:run
-  ```
-- **Underwriting Service (Port 8083)**:
-  ```powershell
-  cd underwriting-service; mvn spring-boot:run
-  ```
-- **Document Service (Port 8084)**:
-  ```powershell
-  cd document-service; mvn spring-boot:run
-  ```
-- **Rate Calculator Service (Port 8086)**:
-  ```powershell
-  cd rate-calculator-service; mvn spring-boot:run
-  ```
-
-#### Step 4: Start Frontend Microservices
-- **Login Frontend Service (Port 8087)**:
-  ```powershell
-  cd login-frontend-service; mvn spring-boot:run
-  ```
-- **Loan Frontend Service (Port 8088)**:
-  ```powershell
-  cd loan-frontend-service; mvn spring-boot:run
-  ```
+3. **Install Angular 15 Dependencies**:
+   ```powershell
+   cd frontend
+   npm install
+   ```
 
 ---
 
-### ⚡ 7.5 Quick-Start Single-Line Scripts
+### 🚀 7.4 Running the Application
 
-#### PowerShell (Windows):
-To launch all services automatically in separate background windows:
-```powershell
-Start-Process powershell -ArgumentList "-NoExit -Command cd eureka-server; mvn spring-boot:run"
-Start-Sleep -Seconds 12
-Start-Process powershell -ArgumentList "-NoExit -Command cd api-gateway; mvn spring-boot:run"
-Start-Sleep -Seconds 8
-Start-Process powershell -ArgumentList "-NoExit -Command cd auth-service; mvn spring-boot:run"
-Start-Process powershell -ArgumentList "-NoExit -Command cd customer-service; mvn spring-boot:run"
-Start-Process powershell -ArgumentList "-NoExit -Command cd loan-origination-service; mvn spring-boot:run"
-Start-Process powershell -ArgumentList "-NoExit -Command cd underwriting-service; mvn spring-boot:run"
-Start-Process powershell -ArgumentList "-NoExit -Command cd document-service; mvn spring-boot:run"
-Start-Process powershell -ArgumentList "-NoExit -Command cd rate-calculator-service; mvn spring-boot:run"
-Start-Process powershell -ArgumentList "-NoExit -Command cd login-frontend-service; mvn spring-boot:run"
-Start-Process powershell -ArgumentList "-NoExit -Command cd loan-frontend-service; mvn spring-boot:run"
-```
-
----
-
-### 🔍 7.6 Verification & Testing Local Setup
-
-1. **Eureka Registry Check**: Access `http://localhost:8761` — verify all 10 registered instances show status `UP`.
-2. **Access Web Portals**:
-   - **Login Portal**: `http://localhost:8087`
-   - **Loan Management Dashboard**: `http://localhost:8088`
-3. **Pre-configured Test Credentials**:
-   - `admin` / `admin123` (System Administrator / All Roles)
-   - `officer` / `officer123` (Loan Officer)
-   - `underwriter` / `underwriter123` (Senior Underwriter)
-   - `customer` / `customer123` (Borrower)
+Launch microservices in sequential order:
+1. **Eureka Server**: `cd eureka-server; mvn spring-boot:run` (Port 8761)
+2. **API Gateway**: `cd api-gateway; mvn spring-boot:run` (Port 8080)
+3. **Core Microservices**: `auth-service` (8085), `customer-service` (8081), `loan-origination-service` (8082), `underwriting-service` (8083), `document-service` (8084), `rate-calculator-service` (8086).
+4. **Angular 15 Frontend**:
+   ```powershell
+   cd frontend
+   ng serve --port 4200
+   ```
 
 ---
 
 ## 8. 🌐 Swagger API Documentation
 
-Interactive OpenAPI Swagger UI portals are accessible at:
+OpenAPI Swagger UI portals:
 - **API Gateway**: `http://localhost:8080/swagger-ui.html`
 - **Auth Service**: `http://localhost:8085/swagger-ui.html`
 - **Customer Service**: `http://localhost:8081/swagger-ui.html`
@@ -443,7 +325,30 @@ Interactive OpenAPI Swagger UI portals are accessible at:
 
 ---
 
-## 9. 🧪 Verification & Build Status
+## 9. 🗄️ Database Architecture & Schemas (2 PostgreSQL Databases)
+
+All backend microservices connect to **exactly 2 PostgreSQL databases**:
+
+| Database | Purpose | Associated Schemas | Services |
+| :--- | :--- | :--- | :--- |
+| `freddie_customer` | Customer-facing & Document Binary Data | `freddie_customer`, `freddie_cards` | `customer-service`, `document-service` |
+| `freddie_loans` | Loan Lifecycle & Risk Decisioning | `freddie_loans`, `freddie_uw` | `loan-origination-service`, `underwriting-service` |
+
+*(Note: Strictly Tables and Views are used. Stored Procedures are intentionally omitted to maintain clean ORM & Native Query abstraction).*
+
+---
+
+## 10. 🅰️ Angular 15 Frontend Commands
+
+The Angular frontend is built with **Angular 15.2.0** (`@angular/core`: `^15.2.0`):
+
+- **Start Dev Server**: `ng serve` (Available at `http://localhost:4200/`)
+- **Build Production**: `ng build` (Output in `dist/` folder)
+- **Run Unit Tests**: `ng test` (Karma/Jasmine test runner)
+
+---
+
+## 11. 🧪 Verification & Build Status
 
 ```text
 [INFO] Reactor Summary for Freddie Mac-Style Home Loan Platform 1.0.0-SNAPSHOT:
