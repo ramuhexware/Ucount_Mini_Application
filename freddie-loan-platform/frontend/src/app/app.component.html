@@ -68,6 +68,9 @@
 
 
     <nav class="nav-menu">
+      <a href="javascript:void(0)" class="nav-item" [class.active]="activeTab === 'sourceCode'" (click)="selectTab('sourceCode')">
+        <i class="fa-solid fa-code"></i> UCP Source Code
+      </a>
       <a href="javascript:void(0)" class="nav-item" [class.active]="activeTab === 'dashboard'" (click)="selectTab('dashboard')" *ngIf="activeRole !== 'Borrower'">
         <i class="fa-solid fa-chart-pie"></i> Dashboard
       </a>
@@ -630,6 +633,11 @@
           </p>
         </div>
       </div>
+    </section>
+
+    <!-- TAB 7: UCP SOURCE CODE BROWSER -->
+    <section class="tab-pane" *ngIf="activeTab === 'sourceCode'">
+      <app-source-browser></app-source-browser>
     </section>
   </main>
 </div>

@@ -1,0 +1,157 @@
+<div class="ucp-source-wrapper">
+  <!-- Top active tab accent line -->
+  <div class="active-tab-line"></div>
+
+  <!-- Header Breadcrumb Sub-text -->
+  <div class="repo-header-path">
+    <span class="system-name">{{ systemName }}</span>
+    <span class="path-separator">/</span>
+    <span class="repo-name-clickable" (click)="toggleRepoDropdown($event)">
+      {{ repoName }} <i class="fa-solid fa-caret-down" style="font-size: 10px; margin-left: 3px;"></i>
+    </span>
+
+    <!-- Repository Selector Dropdown -->
+    <div class="dropdown-menu repo-menu" *ngIf="isRepoDropdownOpen">
+      <div class="dropdown-header">Switch Repository</div>
+      <div 
+        class="dropdown-item" 
+        *ngFor="let repo of availableRepos; let idx = index" 
+        [class.selected]="idx === selectedRepoIndex"
+        (click)="selectRepo(idx)"
+      >
+        <i class="fa-solid fa-book-bookmark repo-icon"></i>
+        <span>{{ repo.repoName }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page Title -->
+  <h1 class="page-title">Source</h1>
+
+  <!-- Toolbar & Path Navigation Row -->
+  <div class="toolbar-row">
+    <!-- Branch Selector Dropdown -->
+    <div class="branch-selector-container">
+      <button class="branch-btn" (click)="toggleBranchDropdown($event)">
+        <i class="fa-solid fa-code-branch branch-icon"></i>
+        <span class="branch-name">{{ currentBranch }}</span>
+        <i class="fa-solid fa-chevron-down caret-icon"></i>
+      </button>
+
+      <div class="dropdown-menu branch-menu" *ngIf="isBranchDropdownOpen">
+        <div class="dropdown-header">Select Branch</div>
+        <div 
+          class="dropdown-item" 
+          *ngFor="let branch of availableBranches" 
+          [class.selected]="branch === currentBranch"
+          (click)="selectBranch(branch)"
+        >
+          <i class="fa-solid fa-check check-icon" *ngIf="branch === currentBranch"></i>
+          <span [style.margin-left]="branch === currentBranch ? '0' : '20px'">{{ branch }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ellipsis Action Menu -->
+    <div class="ellipsis-container">
+      <button class="ellipsis-btn" (click)="toggleEllipsisMenu($event)">...</button>
+      <div class="dropdown-menu ellipsis-menu" *ngIf="isEllipsisMenuOpen">
+        <div class="dropdown-item" (click)="copyFilePath()">
+          <i class="fa-solid fa-copy"></i> Copy Path
+        </div>
+        <div class="dropdown-item" (click)="isEllipsisMenuOpen = false">
+          <i class="fa-solid fa-download"></i> Download Repository ZIP
+        </div>
+        <div class="dropdown-item" (click)="isEllipsisMenuOpen = false">
+          <i class="fa-solid fa-clock-rotate-left"></i> View Commit History
+        </div>
+      </div>
+    </div>
+
+    <!-- Vertical Separator Bar -->
+    <div class="v-divider"></div>
+
+    <!-- Breadcrumb Path Navigator -->
+    <div class="path-breadcrumbs">
+      <ng-container *ngFor="let seg of pathSegments; let i = index; let isLast = last">
+        <span 
+          class="breadcrumb-link" 
+          [class.active-segment]="isLast" 
+          (click)="!isLast && navigateToSegment(i)"
+        >{{ seg }}</span>
+        <span class="breadcrumb-slash">/</span>
+      </ng-container>
+    </div>
+  </div>
+
+  <!-- Source Table View -->
+  <div class="source-table-container">
+    <table class="source-table">
+      <thead>
+        <tr>
+          <th class="col-source">Source</th>
+          <th class="col-description">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Parent Directory Row (..) -->
+        <tr class="up-dir-row" *ngIf="canNavigateUp" (click)="navigateUp()">
+          <td class="col-source">
+            <span class="parent-dir-text">..</span>
+          </td>
+          <td class="col-description"></td>
+        </tr>
+
+        <!-- Directory & File Rows -->
+        <tr 
+          *ngFor="let item of currentItems" 
+          class="item-row" 
+          (click)="onItemClick(item)"
+        >
+          <td class="col-source">
+            <div class="item-name-wrapper">
+              <!-- Folder Icon -->
+              <i class="fa-solid fa-folder folder-icon" *ngIf="item.isFolder"></i>
+              <!-- File Icon -->
+              <i class="fa-regular fa-file-code file-icon" *ngIf="!item.isFolder"></i>
+              
+              <span class="item-link" [class.folder-link]="item.isFolder" [class.file-link]="!item.isFolder">
+                {{ item.name }}
+              </span>
+            </div>
+          </td>
+          <td class="col-description">
+            <span class="commit-description">{{ item.description }}</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Code Viewer Drawer / Modal for File Contents -->
+  <div class="file-viewer-modal-backdrop" *ngIf="selectedFile" (click)="closeFileViewer()">
+    <div class="file-viewer-card" (click)="$event.stopPropagation()">
+      <div class="file-viewer-header">
+        <div class="file-info">
+          <i class="fa-regular fa-file-code file-icon-lg"></i>
+          <div>
+            <h3>{{ selectedFile.name }}</h3>
+            <span class="file-meta">{{ currentPathKey }}/{{ selectedFile.name }} ({{ selectedFile.size || '1.5 KB' }})</span>
+          </div>
+        </div>
+        <button class="close-btn" (click)="closeFileViewer()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="commit-msg-bar">
+        <i class="fa-solid fa-code-commit"></i>
+        <span>Last commit: <strong>{{ selectedFile.description || 'Initial Commit' }}</strong></span>
+      </div>
+
+      <div class="code-editor-viewport">
+        <pre><code>{{ selectedFile.content || '// Source file content preview' }}</code></pre>
+      </div>
+    </div>
+  </div>
+</div>

@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { LoanService, LoanApplication } from './services/loan.service';
 import { AuthService } from './services/auth.service';
 import { FilterStatusPipe } from './pipes/filter-status.pipe';
+import { SourceBrowserComponent } from './source-browser/source-browser.component';
 
 interface AuditLog {
   timestamp: Date;
@@ -15,7 +16,7 @@ interface AuditLog {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, FilterStatusPipe],
+  imports: [CommonModule, FormsModule, FilterStatusPipe, SourceBrowserComponent],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
 })
@@ -32,7 +33,7 @@ export class AppComponent implements OnInit {
 
   // Navigation & Role State
   activeRole: 'Borrower' | 'LoanOfficer' | 'Underwriter' | 'OpsManager' | 'Compliance' = 'Borrower';
-  activeTab: 'dashboard' | 'origination' | 'underwriting' | 'documents' | 'servicing' | 'compliance' | 'borrowerStatus' = 'dashboard';
+  activeTab: 'dashboard' | 'origination' | 'underwriting' | 'documents' | 'servicing' | 'compliance' | 'borrowerStatus' | 'sourceCode' = 'sourceCode';
   
   // Data State
   applications: LoanApplication[] = [];
