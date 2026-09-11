@@ -93,6 +93,16 @@ public class CustomerService {
         log.info("Customer deactivated: id={}", customerId);
     }
 
+    public Page<CustomerResponse> getAllCustomers(Pageable pageable) {
+        return customerRepository.findAll(pageable)
+                .map(this::toResponse);
+    }
+
+    public Page<CustomerResponse> getCustomersByKycStatus(KycStatus kycStatus, Pageable pageable) {
+        return customerRepository.findByKycStatus(kycStatus, pageable)
+                .map(this::toResponse);
+    }
+
     public Page<CustomerResponse> searchCustomers(String name, String email, String kycStatus, Pageable pageable) {
         return customerRepository.searchCustomers(name, email, kycStatus, pageable)
                 .map(this::toResponse);

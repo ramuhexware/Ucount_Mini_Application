@@ -224,4 +224,34 @@ public class CustomerServiceTest {
         assertNotNull(result);
         assertEquals(0, result.getTotalElements());
     }
+
+    // ─── getAllCustomers ──────────────────────────────────────────────────────
+
+    @Test
+    public void getAllCustomers_returnsPage() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Customer> mockPage = new PageImpl<>(List.of(mockCustomer));
+        when(customerRepository.findAll(pageable)).thenReturn(mockPage);
+
+        Page<CustomerResponse> result = customerService.getAllCustomers(pageable);
+
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+        assertEquals("John", result.getContent().get(0).getFirstName());
+    }
+
+    // ─── getCustomersByKycStatus ──────────────────────────────────────────────
+
+    @Test
+    public void getCustomersByKycStatus_returnsPage() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Customer> mockPage = new PageImpl<>(List.of(mockCustomer));
+        when(customerRepository.findByKycStatus(eq(KycStatus.PENDING), eq(pageable))).thenReturn(mockPage);
+
+        Page<CustomerResponse> result = customerService.getCustomersByKycStatus(KycStatus.PENDING, pageable);
+
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+        assertEquals(KycStatus.PENDING, result.getContent().get(0).getKycStatus());
+    }
 }
