@@ -1,26 +1,24 @@
-package com.freddieapp.underwriting;
+package com.freddieapp.origination;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
-import org.springframework.jms.annotation.EnableJms;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Entry point for Underwriting, Pricing & Risk Engine Microservice (Port 8083).
+ * Entry point for Loan Origination Microservice (Port 8082).
  */
 @SpringBootApplication
-@EnableJms
 @EnableWebSecurity
-public class UnderwritingServiceApplication {
+public class LoanOriginationApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(UnderwritingServiceApplication.class, args);
+        SpringApplication.run(LoanOriginationApplication.class, args);
     }
 
     @Bean
@@ -38,8 +36,8 @@ public class UnderwritingServiceApplication {
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
             .info(new Info()
-                .title("Freddie Mac Underwriting & Risk Engine Microservice")
+                .title("Freddie Mac Loan Origination Microservice")
                 .version("1.0.0")
-                .description("Service managing risk scoring, decisioning rule engine, rate pricing, and ActiveMQ notification messaging"));
+                .description("Service managing customer onboarding, loan application lifecycle, and status updates"));
     }
 }

@@ -38,6 +38,9 @@ buildNumber.properties
 *.tar.gz
 *.rar
 
+# Spring Boot Embedded Tomcat temp directories
+tomcat.*/
+
 # Spring Boot generated fat-jar originals
 *.jar.original
 

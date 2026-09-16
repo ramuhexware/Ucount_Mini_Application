@@ -5,8 +5,10 @@ import { catchError, map, tap } from 'rxjs/operators';
 
 export interface LoanApplication {
   loanId: string;
+  id?: number;
   customerId: string;
   customerName: string;
+  email?: string;
   loanType: string;
   loanAmount: number;
   propertyValue: number;
@@ -22,6 +24,23 @@ export interface LoanApplication {
   documents: { documentId: string; fileName: string; type: string; status: string }[];
 }
 
+export interface UnderwritingAssessResult {
+  loanId: number;
+  decision: 'APPROVED' | 'REFERRED' | 'DECLINED';
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  dtiRatio: number;
+  ltvRatio: number;
+  remarks: string;
+}
+
+export interface RateQuoteResult {
+  pricingTier: string;
+  baseRate: number;
+  adjustedRate: number;
+  monthlyEmi: number;
+  ltvRatio: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -32,8 +51,10 @@ export class LoanService {
   private mockApplications: LoanApplication[] = [
     {
       loanId: 'LN-1082',
+      id: 1082,
       customerId: 'CUST-802',
       customerName: 'Marcus Vance',
+      email: 'marcus@freddiemac.com',
       loanType: 'Purchase (Fixed 30Y)',
       loanAmount: 380000,
       propertyValue: 450000,
@@ -53,8 +74,10 @@ export class LoanService {
     },
     {
       loanId: 'LN-2940',
+      id: 2940,
       customerId: 'CUST-390',
       customerName: 'Sarah Jenkins',
+      email: 'sarah@freddiemac.com',
       loanType: 'Refinance (Floating 15Y)',
       loanAmount: 290000,
       propertyValue: 310000,
@@ -73,8 +96,10 @@ export class LoanService {
     },
     {
       loanId: 'LN-4830',
+      id: 4830,
       customerId: 'CUST-411',
       customerName: 'Elena Rostova',
+      email: 'elena@freddiemac.com',
       loanType: 'HELOC (Variable)',
       loanAmount: 85000,
       propertyValue: 600000,
@@ -117,7 +142,6 @@ export class LoanService {
     const monthlyIncome = appData.annualIncome / 12;
     const dti = Number(((appData.monthlyDebt / monthlyIncome) * 100).toFixed(2));
     
-    // Evaluate risk and status auto rules locally
     let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
     if (appData.creditScore < 600 || dti > 50 || ltv > 95) riskLevel = 'CRITICAL';
     else if (appData.creditScore < 660 || dti > 45 || ltv > 90) riskLevel = 'HIGH';
@@ -125,24 +149,17 @@ export class LoanService {
 
     let status: LoanApplication['status'] = 'SUBMITTED';
     let decisionReason = 'Application intake complete.';
-    if (riskLevel === 'CRITICAL') {
-      status = 'REJECTED';
-      decisionReason = 'Auto-declined: Fails minimum credit score or debt tolerance limits.';
-    } else if (riskLevel === 'HIGH') {
-      status = 'UNDER_REVIEW';
-      decisionReason = 'Referred: Risk criteria triggers manual underwriting sweep.';
-    }
 
     const payload = {
       customerId: appData.customerId,
-      customerName: appData.customerName,
-      loanType: appData.loanType === 'Purchase (Fixed 30Y)' ? 'PURCHASE_FIXED_30Y' : (appData.loanType === 'Purchase (Fixed 15Y)' ? 'PURCHASE_FIXED_15Y' : (appData.loanType === 'Refinance (Floating 15Y)' ? 'REFINANCE_FLOATING_15Y' : 'HELOC_VARIABLE')),
+      applicantName: appData.customerName,
+      email: `${appData.customerId.toLowerCase()}@freddiemac.com`,
       loanAmount: appData.loanAmount,
       propertyValue: appData.propertyValue,
-      propertyAddress: '100 Freddie Mac Blvd, McLean VA',
+      monthlyIncome: monthlyIncome,
+      monthlyDebt: appData.monthlyDebt,
       creditScore: appData.creditScore,
-      annualIncome: appData.annualIncome,
-      monthlyDebt: appData.monthlyDebt
+      termMonths: 360
     };
 
     if (this.useRealBackend) {
@@ -160,6 +177,25 @@ export class LoanService {
     }
 
     return this.fallbackLocalSubmit(appData, ltv, dti, riskLevel, status, decisionReason);
+  }
+
+  submitForUnderwritingNative(numericLoanId: number): Observable<LoanApplication> {
+    return this.http.post<any>(`${this.backendBase}/loans/${numericLoanId}/submit-underwriting`, {}).pipe(
+      map(res => this.mapToFrontendModel(res)),
+      tap(updated => this.updateLocalAppStatus(updated.loanId, updated.status, 'PostgreSQL Native Query status update', 'System'))
+    );
+  }
+
+  assessUnderwriting(request: { loanId: number; monthlyIncome: number; monthlyDebt: number; loanAmount: number; propertyValue: number; creditScore: number }): Observable<UnderwritingAssessResult> {
+    return this.http.post<UnderwritingAssessResult>(`${this.backendBase}/underwriting/assess`, request);
+  }
+
+  calculateRateQuote(request: { loanAmount: number; propertyValue: number; creditScore: number; termMonths?: number }): Observable<RateQuoteResult> {
+    return this.http.post<RateQuoteResult>(`${this.backendBase}/rates/calculate`, request);
+  }
+
+  publishJmsEvent(eventType: string, payload: any): Observable<any> {
+    return this.http.post<any>(`${this.backendBase}/notifications/publish?eventType=${eventType}`, JSON.stringify(payload));
   }
 
   private fallbackLocalSubmit(appData: any, ltv: number, dti: number, riskLevel: any, status: any, decisionReason: string): Observable<LoanApplication> {
@@ -180,19 +216,16 @@ export class LoanService {
   }
 
   updateStatus(loanId: string, status: LoanApplication['status'], reason: string, reviewer: string): Observable<boolean> {
-    if (this.useRealBackend) {
-      const payload = { status, decisionReason: reason, reviewer };
-      return this.http.put<any>(`${this.backendBase}/loans/${loanId}/status`, payload).pipe(
+    const numericId = parseInt(loanId.replace('LN-', ''), 10);
+    if (!isNaN(numericId) && this.useRealBackend) {
+      return this.submitForUnderwritingNative(numericId).pipe(
         map(() => true),
-        tap(() => this.updateLocalAppStatus(loanId, status, reason, reviewer)),
-        catchError(err => {
-          console.warn('Real backend update failed. Falling back to local in-memory Mock Sandbox Mode.', err);
+        catchError(() => {
           this.updateLocalAppStatus(loanId, status, reason, reviewer);
           return of(true);
         })
       );
     }
-
     this.updateLocalAppStatus(loanId, status, reason, reviewer);
     return of(true);
   }
@@ -212,26 +245,6 @@ export class LoanService {
   }
 
   addDocument(loanId: string, fileName: string, type: string): Observable<boolean> {
-    if (this.useRealBackend) {
-      const formData = new FormData();
-      formData.append('loanId', loanId);
-      formData.append('customerId', 'CUST-' + Math.floor(100 + Math.random() * 900));
-      formData.append('documentType', type);
-      
-      const blob = new Blob(['Dummy file contents for verification'], { type: 'text/plain' });
-      formData.append('file', blob, fileName);
-
-      return this.http.post<any>(`${this.backendBase}/documents`, formData).pipe(
-        map(() => true),
-        tap(() => this.addLocalDocument(loanId, fileName, type)),
-        catchError(err => {
-          console.warn('Real backend document upload failed. Falling back to local in-memory Mock Sandbox Mode.', err);
-          this.addLocalDocument(loanId, fileName, type);
-          return of(true);
-        })
-      );
-    }
-
     this.addLocalDocument(loanId, fileName, type);
     return of(true);
   }
@@ -253,22 +266,25 @@ export class LoanService {
   }
 
   private mapToFrontendModel(res: any): LoanApplication {
+    const rawId = res.loanId || res.id;
     return {
-      loanId: res.loanId || 'LN-' + Math.floor(1000 + Math.random() * 9000),
+      loanId: rawId ? `LN-${rawId}` : 'LN-' + Math.floor(1000 + Math.random() * 9000),
+      id: rawId,
       customerId: res.customerId || 'CUST-TBD',
-      customerName: res.customerName || 'Mortgage Client',
-      loanType: res.loanType === 'PURCHASE_FIXED_30Y' ? 'Purchase (Fixed 30Y)' : (res.loanType === 'PURCHASE_FIXED_15Y' ? 'Purchase (Fixed 15Y)' : (res.loanType === 'REFINANCE_FLOATING_15Y' ? 'Refinance (Floating 15Y)' : 'HELOC (Variable)')),
+      customerName: res.applicantName || res.customerName || 'Mortgage Client',
+      email: res.email,
+      loanType: 'Purchase (Fixed 30Y)',
       loanAmount: res.loanAmount || 0,
       propertyValue: res.propertyValue || 0,
-      annualIncome: res.annualIncome || 95000,
+      annualIncome: res.monthlyIncome ? res.monthlyIncome * 12 : (res.annualIncome || 95000),
       monthlyDebt: res.monthlyDebt || 1200,
-      ltvRatio: res.ltvRatio || Number((( (res.loanAmount || 0) / (res.propertyValue || 1) ) * 100).toFixed(2)),
-      dtiRatio: res.dtiRatio || Number((( (res.monthlyDebt || 0) / ((res.annualIncome || 120000)/12) ) * 100).toFixed(2)),
+      ltvRatio: res.ltvRatio || Number((((res.loanAmount || 0) / (res.propertyValue || 1)) * 100).toFixed(2)),
+      dtiRatio: res.dtiRatio || Number((((res.monthlyDebt || 0) / ((res.monthlyIncome || 10000))) * 100).toFixed(2)),
       creditScore: res.creditScore || 700,
-      status: res.loanStatus || 'SUBMITTED',
+      status: res.status || 'SUBMITTED',
       riskLevel: res.riskLevel || 'LOW',
-      decisionReason: res.rejectionReason || res.decisionReason || 'Intake process complete.',
-      submittedAt: res.applicationDate ? new Date(res.applicationDate) : new Date(),
+      decisionReason: res.decisionReason || 'Intake process complete.',
+      submittedAt: res.createdAt ? new Date(res.createdAt) : new Date(),
       documents: res.documents || []
     };
   }

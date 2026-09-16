@@ -1,28 +1,56 @@
 package com.freddieapp.underwriting.processor;
 
-import com.freddieapp.underwriting.entity.UnderwritingAssessment;
-import com.freddieapp.underwriting.enums.Decision;
-import com.freddieapp.underwriting.enums.RiskLevel;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
+/**
+ * Rule Engine Pattern utilizing Java 17 Switch Expressions for underwriting risk decisioning.
+ */
 @Component
 public class UnderwritingRuleProcessor {
 
-    public void evaluateRules(UnderwritingAssessment assessment) {
-        if (assessment.getCreditScore() != null && assessment.getCreditScore() < 620) {
-            assessment.setDecision(Decision.DECLINED);
-            assessment.setRiskLevel(RiskLevel.HIGH);
-            assessment.setDecisionReason("Credit score below minimum threshold of 620.");
-        } else if (assessment.getDtiRatio() != null && assessment.getDtiRatio().compareTo(new BigDecimal("45.00")) > 0) {
-            assessment.setDecision(Decision.MANUAL_REVIEW);
-            assessment.setRiskLevel(RiskLevel.MEDIUM);
-            assessment.setDecisionReason("DTI ratio exceeds 45.00%. Automated referral for manual review.");
-        } else {
-            assessment.setDecision(Decision.APPROVED);
-            assessment.setRiskLevel(RiskLevel.LOW);
-            assessment.setDecisionReason("Automated underwriting criteria satisfied.");
+    public enum Decision { APPROVED, REFERRED, DECLINED }
+    public enum RiskLevel { LOW, MEDIUM, HIGH }
+    public enum RuleCategory { PRIME_QUALIFIED, NEAR_PRIME_QUALIFIED, SUBPRIME_RISK }
+
+    public RuleCategory classifyRule(int creditScore) {
+        if (creditScore >= 720) return RuleCategory.PRIME_QUALIFIED;
+        if (creditScore >= 640) return RuleCategory.NEAR_PRIME_QUALIFIED;
+        return RuleCategory.SUBPRIME_RISK;
+    }
+
+    public Decision evaluateDecision(int creditScore, BigDecimal dtiRatio, BigDecimal ltvRatio) {
+        if (creditScore < 580 || dtiRatio.compareTo(new BigDecimal("50.0")) > 0 || ltvRatio.compareTo(new BigDecimal("95.0")) > 0) {
+            return Decision.DECLINED;
         }
+
+        RuleCategory category = classifyRule(creditScore);
+
+        // Java 17 Switch Expression
+        return switch (category) {
+            case PRIME_QUALIFIED -> (dtiRatio.compareTo(new BigDecimal("43.0")) <= 0) ? Decision.APPROVED : Decision.REFERRED;
+            case NEAR_PRIME_QUALIFIED -> (dtiRatio.compareTo(new BigDecimal("48.0")) <= 0) ? Decision.REFERRED : Decision.DECLINED;
+            case SUBPRIME_RISK -> Decision.DECLINED;
+        };
+    }
+
+    public RiskLevel evaluateRiskLevel(Decision decision, BigDecimal dtiRatio, BigDecimal ltvRatio) {
+        if (decision == Decision.DECLINED) return RiskLevel.HIGH;
+        if (decision == Decision.APPROVED && dtiRatio.compareTo(new BigDecimal("36.0")) <= 0 && ltvRatio.compareTo(new BigDecimal("80.0")) <= 0) {
+            return RiskLevel.LOW;
+        }
+        return RiskLevel.MEDIUM;
+    }
+
+    public BigDecimal calculateDti(BigDecimal monthlyDebt, BigDecimal monthlyIncome) {
+        if (monthlyIncome == null || monthlyIncome.compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO;
+        return monthlyDebt.divide(monthlyIncome, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal calculateLtv(BigDecimal loanAmount, BigDecimal propertyValue) {
+        if (propertyValue == null || propertyValue.compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO;
+        return loanAmount.divide(propertyValue, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP);
     }
 }
