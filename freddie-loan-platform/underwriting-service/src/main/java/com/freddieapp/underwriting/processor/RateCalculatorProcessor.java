@@ -16,8 +16,26 @@ public class RateCalculatorProcessor {
     public enum PricingTier { PRIME, NEAR_PRIME, NON_PRIME, SUBPRIME }
 
     public record AmortizationPayment(int month, BigDecimal principalPayment, BigDecimal interestPayment, BigDecimal remainingBalance) {}
+    public record InterestRateQuoteDTO(BigDecimal loanAmount, Integer creditScore, PricingTier pricingTier, BigDecimal adjustedInterestRate, BigDecimal monthlyEmi) {}
+    public record AmortizationScheduleDTO(BigDecimal loanAmount, BigDecimal annualInterestRate, int termMonths, List<AmortizationPayment> schedule) {}
 
     private static final BigDecimal BASE_BENCHMARK_RATE = new BigDecimal("6.25");
+
+    public InterestRateQuoteDTO calculateQuote(BigDecimal loanAmount, BigDecimal propertyValue, int creditScore, int termMonths) {
+        BigDecimal ltv = (propertyValue != null && propertyValue.compareTo(BigDecimal.ZERO) > 0)
+            ? loanAmount.divide(propertyValue, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100"))
+            : BigDecimal.ZERO;
+        PricingTier tier = determinePricingTier(creditScore);
+        BigDecimal adjustedRate = calculateAdjustedRate(creditScore, ltv);
+        BigDecimal emi = calculateMonthlyEmi(loanAmount, adjustedRate, termMonths);
+
+        return new InterestRateQuoteDTO(loanAmount, creditScore, tier, adjustedRate, emi);
+    }
+
+    public AmortizationScheduleDTO generateAmortizationScheduleDto(BigDecimal principal, BigDecimal annualRate, int termMonths) {
+        List<AmortizationPayment> payments = generateAmortizationSchedule(principal, annualRate, termMonths);
+        return new AmortizationScheduleDTO(principal, annualRate, termMonths, payments);
+    }
 
     public PricingTier determinePricingTier(int creditScore) {
         if (creditScore >= 740) return PricingTier.PRIME;

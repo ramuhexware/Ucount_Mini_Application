@@ -15,6 +15,40 @@ public class UnderwritingRuleProcessor {
     public enum RiskLevel { LOW, MEDIUM, HIGH }
     public enum RuleCategory { PRIME_QUALIFIED, NEAR_PRIME_QUALIFIED, SUBPRIME_RISK }
 
+    public record UnderwritingAssessmentDTO(
+        Long loanId,
+        BigDecimal loanAmount,
+        BigDecimal propertyValue,
+        BigDecimal monthlyIncome,
+        BigDecimal monthlyDebt,
+        Integer creditScore
+    ) {}
+
+    public record AssessmentResultDTO(
+        Long loanId,
+        Decision decision,
+        RiskLevel riskLevel,
+        BigDecimal dtiRatio,
+        BigDecimal ltvRatio,
+        String message
+    ) {}
+
+    public AssessmentResultDTO assessApplication(UnderwritingAssessmentDTO dto) {
+        BigDecimal dti = calculateDti(dto.monthlyDebt(), dto.monthlyIncome());
+        BigDecimal ltv = calculateLtv(dto.loanAmount(), dto.propertyValue());
+        Decision decision = evaluateDecision(dto.creditScore(), dti, ltv);
+        RiskLevel riskLevel = evaluateRiskLevel(decision, dti, ltv);
+
+        return new AssessmentResultDTO(
+            dto.loanId(),
+            decision,
+            riskLevel,
+            dti,
+            ltv,
+            "Underwriting decision completed for loan: " + dto.loanId()
+        );
+    }
+
     public RuleCategory classifyRule(int creditScore) {
         if (creditScore >= 720) return RuleCategory.PRIME_QUALIFIED;
         if (creditScore >= 640) return RuleCategory.NEAR_PRIME_QUALIFIED;
@@ -28,7 +62,6 @@ public class UnderwritingRuleProcessor {
 
         RuleCategory category = classifyRule(creditScore);
 
-        // Java 17 Switch Expression
         return switch (category) {
             case PRIME_QUALIFIED -> (dtiRatio.compareTo(new BigDecimal("43.0")) <= 0) ? Decision.APPROVED : Decision.REFERRED;
             case NEAR_PRIME_QUALIFIED -> (dtiRatio.compareTo(new BigDecimal("48.0")) <= 0) ? Decision.REFERRED : Decision.DECLINED;
