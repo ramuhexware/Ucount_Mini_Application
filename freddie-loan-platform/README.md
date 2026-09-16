@@ -114,11 +114,14 @@ flowchart TD
         D2 -->|Yes| D3[Log SELLER-SERVICER-DISCONTINUE-CTOS & Expire]
         D2 -->|No| D4[Expire Account Functional Roles]
     end
-    subgraph Flow 5: Loan Origination & PostgreSQL Native SQL Update
+    subgraph Flow 5: Loan Origination & Reactive WebClient Underwriting Trigger
         E1[Submit Mortgage Application] --> E2[Execute PostgreSQL Native Query UPDATE]
+        E2 --> E3[Reactive WebClient POST to Underwriting Service]
+        E3 --> E4[Update Final Status via Native SQL Query]
     end
-    subgraph Flow 6: Automated Underwriting & Rate Pricing Engine
-        F1[Java 17 Switch Underwriting Assessment] --> F2[Calculate Tiered Rate, EMI & 360-Mo Amortization]
+    subgraph Flow 6: Automated Underwriting & WebClient Loan Lookup
+        F1[WebClient GET Enriched Loan Details] --> F2[Java 17 Switch Underwriting Assessment]
+        F2 --> F3[Calculate Tiered Rate, EMI & 360-Mo Amortization]
     end
     subgraph Flow 7: ControlM ACR Purge & BatchJob Controller
         G1[ControlM ACR Batch Purge] --> G2[Execute Batch Status / History Endpoint with inMap Binding]
@@ -204,17 +207,54 @@ flowchart TD
 #### 🔹 Functional Flow 8: ActiveMQ JMS Event Publishing & UUID Tracking
 - **Endpoint**: `POST /api/v1/notifications/publish`
 - **Controller/Publisher**: `UnderwritingController.java` -> `NotificationJmsPublisher.java`
+- **Configuration**: `application.properties` -> `freddie.underwriting.jms.destination=freddie.underwriting.events`
 - **Functional Description**:
+  - Injects `freddie.underwriting.jms.destination` via `@Value("${freddie.underwriting.jms.destination:freddie.underwriting.events}")`.
   - Generates event UUIDs (`java.util.UUID.randomUUID()`) for real-time events.
-  - Saves initial event tracker (`saveEventTracker`), serializes payload (`objectMapper.writeValueAsString`), logs `"converted DTO to string"`, and dispatches message via Spring `JmsTemplate.convertAndSend` to queue `freddie.underwriting.events`.
+  - Saves initial event tracker (`saveEventTracker`), serializes payload (`objectMapper.writeValueAsString`), logs `"converted DTO to string"`, and dispatches message via Spring `JmsTemplate.convertAndSend` to the injected destination queue.
 
 ---
 
-## 3. 🏛️ Architecture of the Application
+## 3. 🏛️ Architecture & Clean Enterprise Package Structure
 
-The platform is structured into **2 core microservice modules**:
-1. **`loan-origination-service`** (Port `8082`): Customer onboarding, Stage 1/2 intake, account lookup/update, OIM async sync, relationship expiration, and PostgreSQL native query status management.
-2. **`underwriting-service`** (Port `8083`): Java 17 pattern-matching underwriting risk engine, real-time rate/EMI pricing, 360-month amortization, ControlM ACR batch purge, ActiveMQ JMS messaging with UUID event tracking, and BatchJobController endpoints.
+The platform is structured into **2 modular Spring Boot microservices** implementing a clean enterprise tier separation:
+
+### 📂 Clean Enterprise Package Layout (Both Microservices)
+
+```
+freddie-loan-platform/
+├── loan-origination-service/ (Port 8082)
+│   └── src/main/java/com/freddieapp/origination/
+│       ├── 📁 auth/          # Authentication controllers & login endpoints
+│       ├── 📁 cache/         # Cache management (OAuthTokenCache)
+│       ├── 📁 config/        # SecurityConfig & RestClientConfig (Sailpoint & OpenAPI Tags)
+│       ├── 📁 controller/    # LoanOriginationController REST API endpoints
+│       ├── 📁 domain/        # JPA Entities (LoanApplicationEntity mapped to loan_applications)
+│       ├── 📁 dto/           # Data Transfer Objects (Requests, Responses, Lookups, Stage 1/2)
+│       ├── 📁 exception/     # Custom Exception handling (UcsApiException)
+│       ├── 📁 filter/        # Security request filters (JwtAuthenticationFilter)
+│       ├── 📁 pdf/           # PDF Export generators (LoanSummaryPdfExporter)
+│       ├── 📁 repository/    # Spring Data JPA repositories & native SQL queries
+│       ├── 📁 service/       # Business service layer (LoanOriginationService, WebClient sync)
+│       └── 📁 util/          # Utility helpers (DateUtil, UcsApiUtil)
+│
+└── underwriting-service/ (Port 8083)
+    └── src/main/java/com/freddieapp/underwriting/
+        ├── 📁 auth/          # Authentication & token endpoints
+        ├── 📁 cache/         # Underwriting in-memory cache
+        ├── 📁 config/        # RestClientConfig (Sailpoint RestTemplate & OpenAPI Tags)
+        ├── 📁 controller/    # UnderwritingController REST API endpoints
+        ├── 📁 domain/        # Domain entities (UnderwritingAuditLogEntity)
+        ├── 📁 dto/           # Assessment, Rate Quote, Amortization & Notification DTOs
+        ├── 📁 exception/     # Custom Exception handling (UnderwritingException)
+        ├── 📁 filter/        # Underwriting security filter
+        ├── 📁 messaging/     # ActiveMQ JMS Event Publisher (NotificationJmsPublisher)
+        ├── 📁 pdf/           # Amortization PDF Exporter (AmortizationPdfExporter)
+        ├── 📁 processor/     # Business logic rule engine & rate math processors
+        ├── 📁 repository/    # JPA audit log repositories
+        ├── 📁 service/       # Business service layer (UnderwritingService)
+        └── 📁 util/          # Financial math utilities (FinancialMathUtil, UcsApiUtil)
+```
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐

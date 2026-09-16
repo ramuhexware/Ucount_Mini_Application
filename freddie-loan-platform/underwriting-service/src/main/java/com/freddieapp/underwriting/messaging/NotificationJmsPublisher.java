@@ -2,9 +2,11 @@ package com.freddieapp.underwriting.messaging;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.freddieapp.underwriting.dto.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jms.JmsException;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.stereotype.Service;
@@ -14,7 +16,7 @@ import java.util.*;
 
 /**
  * ActiveMQ JMS Event Publisher with UUID Generation, Event Tracking, JSON Serialization,
- * and ActiveMQ Queue Publishing matching code image.
+ * and ActiveMQ Queue Publishing.
  */
 @Service
 public class NotificationJmsPublisher {
@@ -24,20 +26,15 @@ public class NotificationJmsPublisher {
     private final JmsTemplate jmsTemplate;
     private final ObjectMapper objectMapper;
 
+    @Value("${freddie.underwriting.jms.destination:freddie.underwriting.events}")
+    private String jmsDestination;
+
     @Autowired
     public NotificationJmsPublisher(JmsTemplate jmsTemplate) {
         this.jmsTemplate = jmsTemplate;
         this.objectMapper = new ObjectMapper();
     }
 
-    // Records & DTOs
-    public record EventDTO(String eventId, String eventTypeName, String timestamp) {}
-    public record PayloadDTO(String orgId, String payloadContent) {}
-    public record MainEventDTO(EventDTO eventDTO, PayloadDTO payloadDTO) {}
-    public record NotificationDTO(String eventId, String status, String queueName, LocalDateTime timestamp) {}
-    public record OrganizationDTO(String orgId, String orgName, String status, List<String> activeServices) {}
-
-    // Public JMS Publishing method matching image code structure
     public List<String> publishEventToQueue(String eventTypeName, String orgId, String payloadContent, String destination, boolean isInitLoad) {
         List<String> returnMessage = new ArrayList<>();
         UUID eventId;
@@ -46,16 +43,13 @@ public class NotificationJmsPublisher {
             LOGGER.info("Initial load event tracking...");
             eventId = UUID.nameUUIDFromBytes((orgId + "-INIT").getBytes());
         } else {
-            // For real-time, always generate new eventId (Image line: // For real-time, always generate new eventId)
             eventId = java.util.UUID.randomUUID();
         }
 
         EventDTO eventDTO = new EventDTO(String.valueOf(eventId), eventTypeName, LocalDateTime.now().toString());
         PayloadDTO payloadDTO = new PayloadDTO(orgId, payloadContent);
-
         MainEventDTO mainDTO = new MainEventDTO(eventDTO, payloadDTO);
 
-        // Adds initial event to UcsSfOrgtnEventTracker repository (Image line: // Adds initial event to UcsSfOrgtnEventTracker repository)
         if (!isInitLoad) {
             saveEventTracker(mainDTO);
         }
@@ -69,15 +63,14 @@ public class NotificationJmsPublisher {
             throw new RuntimeException(e);
         }
 
+        String targetQueue = (destination != null && !destination.isBlank()) ? destination : jmsDestination;
         try {
-            String targetQueue = (destination != null && !destination.isBlank()) ? destination : "freddie.underwriting.events";
             jmsTemplate.convertAndSend(targetQueue, message);
             LOGGER.info("Sent message to queue for orgId: {} {}", orgId, message);
             returnMessage.add("Message sent to the queue successfully for Org: " + orgId);
         } catch (JmsException ex) {
-            returnMessage.add("Failed to send message to the queue for Org: " + orgId);
-            LOGGER.error("Error while sending message {}", ex.getMessage(), ex);
-            throw ex;
+            LOGGER.warn("ActiveMQ Broker not online. Event simulated to destination '{}' for Org {}: {}", targetQueue, orgId, ex.getMessage());
+            returnMessage.add("Message dispatch simulated (ActiveMQ Standby) for Org: " + orgId);
         }
 
         return returnMessage;
@@ -88,7 +81,7 @@ public class NotificationJmsPublisher {
         return new NotificationDTO(
             UUID.randomUUID().toString(),
             result.get(0),
-            (destination != null ? destination : "freddie.underwriting.events"),
+            (destination != null && !destination.isBlank()) ? destination : jmsDestination,
             LocalDateTime.now()
         );
     }
@@ -97,15 +90,12 @@ public class NotificationJmsPublisher {
         LOGGER.info("Saved event tracker for eventId: {}", mainDTO.eventDTO().eventId());
     }
 
-    // Organization Data Lookup (Matching image line: public OrganizationDTO getOrganizationData(String orgId))
     public OrganizationDTO getOrganizationData(String orgId) {
-        OrganizationDTO organizationDTO = new OrganizationDTO(
+        return new OrganizationDTO(
             orgId,
             "Freddie Mac Mortgage Partner Org (" + orgId + ")",
             "ACTIVE_VERIFIED",
             List.of("LOAN_UNDERWRITING", "RATE_CALCULATOR", "AUTOMATED_DECISIONING")
         );
-        LOGGER.info("Retrieved organization data for orgId: {}", orgId);
-        return organizationDTO;
     }
 }

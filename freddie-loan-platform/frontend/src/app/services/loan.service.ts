@@ -24,21 +24,51 @@ export interface LoanApplication {
   documents: { documentId: string; fileName: string; type: string; status: string }[];
 }
 
-export interface UnderwritingAssessResult {
+export interface AssessmentResultDTO {
   loanId: number;
   decision: 'APPROVED' | 'REFERRED' | 'DECLINED';
-  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   dtiRatio: number;
   ltvRatio: number;
-  remarks: string;
+  approvalConditions: string[];
+  riskFlags: string[];
 }
 
-export interface RateQuoteResult {
+export interface PricingQuoteDTO {
   pricingTier: string;
   baseRate: number;
-  adjustedRate: number;
+  ltvAdjustment: number;
+  finalInterestRate: number;
   monthlyEmi: number;
-  ltvRatio: number;
+}
+
+export interface AmortizationScheduleDTO {
+  loanAmount: number;
+  interestRate: number;
+  termMonths: number;
+  monthlyPayment: number;
+  schedule: {
+    month: number;
+    payment: number;
+    principal: number;
+    interest: number;
+    remainingBalance: number;
+  }[];
+}
+
+export interface AccountLookupUpdateDTO {
+  ucsLineOfBusinessDTOs: { idLiOfBus: number; nameLiOfBus: string }[];
+  ucsProdtDTOs: { [key: string]: { idProdt: number; nameProdt: string }[] };
+  ucsOrgtnRoleDTOs: { [key: string]: { idOrgtnRole: number; nameOrgtnRole: string }[] };
+  ucsCntprtyAcctSt: string[];
+  ucsCntprtyAcctRoleSt: string[];
+}
+
+export interface NotificationDTO {
+  eventId: string;
+  status: string;
+  queueName: string;
+  timestamp: string;
 }
 
 @Injectable({
@@ -182,20 +212,72 @@ export class LoanService {
   submitForUnderwritingNative(numericLoanId: number): Observable<LoanApplication> {
     return this.http.post<any>(`${this.backendBase}/loans/${numericLoanId}/submit-underwriting`, {}).pipe(
       map(res => this.mapToFrontendModel(res)),
-      tap(updated => this.updateLocalAppStatus(updated.loanId, updated.status, 'PostgreSQL Native Query status update', 'System'))
+      tap(updated => this.updateLocalAppStatus(updated.loanId, updated.status, 'PostgreSQL Native Query + WebClient Underwriting trigger', 'System'))
     );
   }
 
-  assessUnderwriting(request: { loanId: number; monthlyIncome: number; monthlyDebt: number; loanAmount: number; propertyValue: number; creditScore: number }): Observable<UnderwritingAssessResult> {
-    return this.http.post<UnderwritingAssessResult>(`${this.backendBase}/underwriting/assess`, request);
+  assessUnderwriting(request: { loanId?: number; monthlyIncome: number; monthlyDebt: number; loanAmount: number; propertyValue: number; creditScore: number }): Observable<AssessmentResultDTO> {
+    return this.http.post<AssessmentResultDTO>(`${this.backendBase}/underwriting/assess`, request);
   }
 
-  calculateRateQuote(request: { loanAmount: number; propertyValue: number; creditScore: number; termMonths?: number }): Observable<RateQuoteResult> {
-    return this.http.post<RateQuoteResult>(`${this.backendBase}/rates/calculate`, request);
+  getPricingQuote(creditScore: number = 720, ltvRatio: number = 80.0): Observable<PricingQuoteDTO> {
+    return this.http.get<PricingQuoteDTO>(`${this.backendBase}/rates/quote?creditScore=${creditScore}&ltvRatio=${ltvRatio}`);
   }
 
-  publishJmsEvent(eventType: string, payload: any): Observable<any> {
-    return this.http.post<any>(`${this.backendBase}/notifications/publish?eventType=${eventType}`, JSON.stringify(payload));
+  getAmortizationSchedule(loanAmount: number = 350000, interestRate: number = 6.50, termMonths: number = 360): Observable<AmortizationScheduleDTO> {
+    return this.http.get<AmortizationScheduleDTO>(`${this.backendBase}/rates/amortization?loanAmount=${loanAmount}&interestRate=${interestRate}&termMonths=${termMonths}`);
+  }
+
+  getAccountLookupUpdate(): Observable<AccountLookupUpdateDTO> {
+    return this.http.get<AccountLookupUpdateDTO>(`${this.backendBase}/account/lookup/update`);
+  }
+
+  createAccount(accountReq: any): Observable<any> {
+    return this.http.post<any>(`${this.backendBase}/account/create`, accountReq);
+  }
+
+  purgeControlmACR(): Observable<any> {
+    return this.http.post<any>(`${this.backendBase}/comments/batch/controlm-acr`, {});
+  }
+
+  getBatchJobStatus(jobName: string, inMap: any = {}): Observable<any> {
+    return this.http.post<any>(`${this.backendBase}/jobs/${jobName}/status`, inMap);
+  }
+
+  publishJmsNotification(eventType: string = 'UNDERWRITING_ASSESSMENT', destination?: string, payloadJson?: string): Observable<NotificationDTO> {
+    let url = `${this.backendBase}/notifications/publish?eventType=${eventType}`;
+    if (destination) {
+      url += `&destination=${destination}`;
+    }
+    const body = payloadJson || '{"status":"ASSESSMENT_COMPLETED"}';
+    return this.http.post<NotificationDTO>(url, body);
+  }
+
+  onboardStage1User(req: { orgName: string; email: string }): Observable<any> {
+    return this.http.post<any>(`${this.backendBase}/counterparty/stage1/onboard`, req);
+  }
+
+  approveStage1User(userId: string): Observable<any> {
+    return this.http.put<any>(`${this.backendBase}/counterparty/stage1/approve/${userId}`, {});
+  }
+
+  saveStage2Profile(req: { userId: string; userType: string; lineOfBusiness: string; productFamily: string }): Observable<any> {
+    return this.http.post<any>(`${this.backendBase}/counterparty/stage2/profile`, req);
+  }
+
+  updateStatus(loanId: string, status: LoanApplication['status'], reason: string, reviewer: string): Observable<boolean> {
+    const numericId = parseInt(loanId.replace('LN-', ''), 10);
+    if (!isNaN(numericId) && this.useRealBackend) {
+      return this.submitForUnderwritingNative(numericId).pipe(
+        map(() => true),
+        catchError(() => {
+          this.updateLocalAppStatus(loanId, status, reason, reviewer);
+          return of(true);
+        })
+      );
+    }
+    this.updateLocalAppStatus(loanId, status, reason, reviewer);
+    return of(true);
   }
 
   private fallbackLocalSubmit(appData: any, ltv: number, dti: number, riskLevel: any, status: any, decisionReason: string): Observable<LoanApplication> {
@@ -213,21 +295,6 @@ export class LoanService {
     const currentList = this.applicationsSubject.value;
     this.applicationsSubject.next([newApp, ...currentList]);
     return of(newApp);
-  }
-
-  updateStatus(loanId: string, status: LoanApplication['status'], reason: string, reviewer: string): Observable<boolean> {
-    const numericId = parseInt(loanId.replace('LN-', ''), 10);
-    if (!isNaN(numericId) && this.useRealBackend) {
-      return this.submitForUnderwritingNative(numericId).pipe(
-        map(() => true),
-        catchError(() => {
-          this.updateLocalAppStatus(loanId, status, reason, reviewer);
-          return of(true);
-        })
-      );
-    }
-    this.updateLocalAppStatus(loanId, status, reason, reviewer);
-    return of(true);
   }
 
   private updateLocalAppStatus(loanId: string, status: LoanApplication['status'], reason: string, reviewer: string) {

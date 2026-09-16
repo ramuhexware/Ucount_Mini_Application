@@ -1,24 +1,29 @@
 package com.freddieapp.origination.service;
 
-import com.freddieapp.origination.model.LoanApplicationEntity;
-import com.freddieapp.origination.model.LoanApplicationEntity.*;
+import com.freddieapp.origination.cache.OAuthTokenCache;
+import com.freddieapp.origination.domain.LoanApplicationEntity;
+import com.freddieapp.origination.dto.*;
+import com.freddieapp.origination.exception.UcsApiException;
 import com.freddieapp.origination.repository.LoanApplicationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * Business Service Layer for Loan Origination, Stage 1/2 Counterparty Onboarding, Account Services,
- * and Asynchronous OIM Data Sync ThreadPool Execution.
+ * Core Business Service Layer for Loan Origination, Counterparty Intake,
+ * Account Management, and Reactive WebClient Data Synchronization.
  */
 @Service
 @Transactional
@@ -26,23 +31,33 @@ public class LoanOriginationService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(LoanOriginationService.class);
     private final LoanApplicationRepository repository;
+    private final OAuthTokenCache oAuthTokenCache;
+    private final WebClient webClient;
 
     @Value("${dataServiceURL:http://localhost:8082/api/v1}")
     private String dataServiceURL;
 
+    @Value("${underwritingServiceURL:http://localhost:8083/api/v1}")
+    private String underwritingServiceURL;
+
     @Value("${byPassOimSync:false}")
     private boolean byPassOimSync;
 
+    private final long apiRetriesMax = 3L;
+    private final Duration apiRetriesDelay = Duration.ofSeconds(1);
+
     // In-memory data store for Stage 1/2 Counterparty Intake
-    private final Map<String, Stage1UserResponse> stage1Users = new ConcurrentHashMap<>();
-    private final Map<String, Stage2ProfileRequest> stage2Profiles = new ConcurrentHashMap<>();
+    private final Map<String, Stage1UserResponseDTO> stage1Users = new ConcurrentHashMap<>();
+    private final Map<String, Stage2ProfileRequestDTO> stage2Profiles = new ConcurrentHashMap<>();
 
     @Autowired
-    public LoanOriginationService(LoanApplicationRepository repository) {
+    public LoanOriginationService(LoanApplicationRepository repository, OAuthTokenCache oAuthTokenCache, WebClient webClient) {
         this.repository = repository;
+        this.oAuthTokenCache = oAuthTokenCache;
+        this.webClient = webClient;
     }
 
-    public LoanResponse createLoanApplication(LoanRequest request) {
+    public LoanResponseDTO createLoanApplication(LoanRequestDTO request) {
         LoanApplicationEntity entity = new LoanApplicationEntity();
         entity.setCustomerId(request.customerId());
         entity.setApplicantName(request.applicantName());
@@ -59,28 +74,81 @@ public class LoanOriginationService {
     }
 
     @Transactional(readOnly = true)
-    public LoanResponse getLoanById(Long loanId) {
+    public LoanResponseDTO getLoanById(Long loanId) {
         LoanApplicationEntity entity = repository.findById(loanId)
-            .orElseThrow(() -> new RuntimeException("Loan application not found with ID: " + loanId));
+            .orElseThrow(() -> new UcsApiException(HttpStatus.NOT_FOUND, "Loan application not found with ID: " + loanId));
         return mapToResponse(entity);
     }
 
     @Transactional(readOnly = true)
-    public List<LoanResponse> getLoansByCustomerId(String customerId) {
+    public List<LoanResponseDTO> getLoansByCustomerId(String customerId) {
         return repository.findByCustomerId(customerId).stream()
             .map(this::mapToResponse)
             .collect(Collectors.toList());
     }
 
-    public LoanResponse submitForUnderwritingNative(Long loanId) {
+    public LoanResponseDTO submitForUnderwritingNative(Long loanId) {
         int rowsUpdated = repository.updateStatusNative(loanId, "UNDER_REVIEW");
         if (rowsUpdated == 0) {
-            throw new RuntimeException("Failed to update status via PostgreSQL native query for ID: " + loanId);
+            throw new UcsApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to update status via PostgreSQL native query for ID: " + loanId);
         }
 
         LoanApplicationEntity entity = repository.findById(loanId)
-            .orElseThrow(() -> new RuntimeException("Loan not found: " + loanId));
+            .orElseThrow(() -> new UcsApiException(HttpStatus.NOT_FOUND, "Loan not found: " + loanId));
+
+        // Trigger Reactive WebClient inter-service call to Underwriting Service
+        triggerUnderwritingWebClient(entity);
+
         return mapToResponse(entity);
+    }
+
+    private void triggerUnderwritingWebClient(LoanApplicationEntity entity) {
+        String targetUrl = underwritingServiceURL + "/underwriting/assess";
+        Map<String, Object> requestPayload = Map.of(
+            "loanId", entity.getId(),
+            "customerId", entity.getCustomerId(),
+            "loanAmount", entity.getLoanAmount(),
+            "propertyValue", entity.getPropertyValue(),
+            "monthlyIncome", entity.getMonthlyIncome(),
+            "monthlyDebt", entity.getMonthlyDebt(),
+            "creditScore", entity.getCreditScore(),
+            "termMonths", entity.getTermMonths()
+        );
+
+        LOGGER.info("WebClient: Initiating reactive underwriting risk assessment for loan ID: {} via {}", entity.getId(), targetUrl);
+
+        webClient.post()
+            .uri(targetUrl)
+            .headers(h -> h.add("Authorization", oAuthTokenCache.getOAuthAccessToken()))
+            .bodyValue(requestPayload)
+            .exchangeToMono(clientResponse -> {
+                LOGGER.info("WebClient: Received underwriting response status code {}", clientResponse.statusCode().value());
+                if (clientResponse.statusCode().is4xxClientError()) {
+                    throw new UcsApiException(HttpStatus.valueOf(clientResponse.statusCode().value()), "Underwriting API Client Error");
+                } else if (clientResponse.statusCode().is5xxServerError()) {
+                    throw new UcsApiException(HttpStatus.valueOf(clientResponse.statusCode().value()), "Underwriting Service Internal Error");
+                } else {
+                    return clientResponse.bodyToMono(Map.class);
+                }
+            })
+            .retryWhen(reactor.util.retry.Retry.backoff(apiRetriesMax, apiRetriesDelay)
+                .jitter(0.2d)
+                .doAfterRetry(retrySignal -> LOGGER.info("WebClient Underwriting Retried: {}", retrySignal.totalRetries()))
+                .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) -> new UcsApiException(HttpStatus.SERVICE_UNAVAILABLE, "Underwriting Service unavailable after retries"))
+            )
+            .subscribe(
+                responseMap -> {
+                    String decision = (String) responseMap.get("decision");
+                    LOGGER.info("WebClient: Underwriting decision received for loan {}: {}", entity.getId(), decision);
+                    if (decision != null) {
+                        repository.updateStatusNative(entity.getId(), decision);
+                    }
+                },
+                error -> {
+                    LOGGER.error("WebClient: Failed underwriting assessment for loan {}: {}", entity.getId(), error.getMessage());
+                    saveToErrorTable(targetUrl, String.valueOf(entity.getId()), "UNDERWRITING_ASSESSMENT", error);
+                }
+            );
     }
 
     // Account Lookup Data
@@ -175,42 +243,62 @@ public class LoanOriginationService {
         return accountReq;
     }
 
-    // OIM Database Sync
     private void updateOimDatabaseOnNameUpdate(String idCntprtyAcct) {
         LOGGER.info("Org API: OIM Database Sync triggered for counterparty account: {}", idCntprtyAcct);
         String targetUrl = dataServiceURL + "/account/update-family/" + idCntprtyAcct;
         performOimSyncGet(targetUrl, idCntprtyAcct, "FAMILY_NAME_UPDATE", String.class);
     }
 
-    // Asynchronous OIM Sync Execution (Matching code image lines 59-97)
     @Async("oimDataSyncThreadPool")
     public <T> void performOimSyncGet(String url, Object object, String operation, Class<T> responseType) {
         if (!byPassOimSync) {
             try {
                 Thread.sleep(2000);
             } catch (InterruptedException e) {
-                throw new RuntimeException("Thread Interrupted exception " + e);
+                throw new RuntimeException(" Thread Interrupted exception " + e);
             }
-            LOGGER.info("ORG API: OIM Sync Get service call started... for URL=" + url + " Primary Key=" + object + " Opreation=" + operation + " Thread name = " + Thread.currentThread().getName());
-            LOGGER.info("Recived response from OIM Sync application with status code 200");
-            LOGGER.info("Received reply from " + url + " Primary Key=" + object + " Opreation=" + operation + " Thread name = " + Thread.currentThread().getName() + " with response OK");
+            LOGGER.info("ORG API: OIM Sync Get service call started... for URL-" + url + " Primary Key-" + object + " Opreation-" + operation + " Thread name " + Thread.currentThread().getName());
+            webClient.get().uri(url)
+                .headers(h -> h.add("Authorization", oAuthTokenCache.getOAuthAccessToken()))
+                .exchangeToMono(clientResponse -> {
+                    LOGGER.info("Recived response from OIM Sync application with status code " + clientResponse.statusCode().value());
+                    if (clientResponse.statusCode().is4xxClientError()) {
+                        throw new UcsApiException(HttpStatus.valueOf(clientResponse.statusCode().value()), "Org API :: URL is wrong ");
+                    } else if (clientResponse.statusCode().is5xxServerError()) {
+                        throw new UcsApiException(HttpStatus.valueOf(clientResponse.statusCode().value()), " Org API :: Error occured in OIM Sync :: for more details check OIM sync logs");
+                    } else {
+                        return clientResponse.bodyToMono(responseType);
+                    }
+                })
+                .retryWhen(reactor.util.retry.Retry.backoff(apiRetriesMax, apiRetriesDelay)
+                    .jitter(0d)
+                    .doAfterRetry(retrySignal -> {
+                        LOGGER.info("Retried " + retrySignal.totalRetries());
+                    })
+                    .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) -> new UcsApiException(HttpStatus.valueOf(500), "Error in OIM sync"))
+                )
+                .subscribe(
+                    response -> {
+                        LOGGER.info("Received reply from " + url + " Primary Key=" + object + " Opreation=" + operation + " Thread name = " + Thread.currentThread().getName() + " with response " + response);
+                    },
+                    error -> {
+                        saveToErrorTable(url, (String) object, operation, error);
+                    }
+                );
         } else {
             LOGGER.info("OIM Sync is not happening because byPassOimSync = " + byPassOimSync);
         }
     }
 
-    // Save To Error Table (Matching code image lines 99-104)
     private void saveToErrorTable(String url, String primaryKey, String operation, Throwable exception) {
         LOGGER.error("Exception while calling get for " + url + " for entity " + primaryKey + " while " + operation + " Exception msg " + exception.getMessage() + " Thread name " + Thread.currentThread().getName());
     }
 
-    // Expire Account Eligibility & Relationship
     private void expireAccountEligibilityAndRelationship(int idOrgtnRole, AccountSaveDTO accountReq) {
         LOGGER.info("Org API: Expiring account functional roles and eligibility for org role: {}", idOrgtnRole);
         expireAccountRelationship(idOrgtnRole, accountReq);
     }
 
-    // Expire Account Relationship
     private void expireAccountRelationship(int idOrgtnRole, AccountSaveDTO accountReq) {
         List<Short> expirableRelationshipsList = List.of((short) 25, (short) 30);
         List<Short> activeRelationships = List.of((short) 25, (short) 10);
@@ -230,13 +318,11 @@ public class LoanOriginationService {
         }
     }
 
-    // Expire Active Cash Or MC
     private void expireActiveIsCashOrMC(Short relationId, Integer idOrgtnRole, String idCntprtyAcct) {
         List<Integer> isCashMCdReIExtn = Arrays.asList(1, 2);
         LOGGER.info("Expiring active Cash/MC relationships: {} for account: {}", isCashMCdReIExtn, idCntprtyAcct);
     }
 
-    // Account Profile
     public AccountProfileRespDTO getAccountProfile(AccountProfileReqDTO accountProfileReqDTO) {
         LOGGER.info("OrgAPI: Fetching Account Profile for {}", accountProfileReqDTO.idCntprtyAcct());
         return new AccountProfileRespDTO(
@@ -247,38 +333,38 @@ public class LoanOriginationService {
     }
 
     // Stage 1 Intake & Onboarding
-    public Stage1UserResponse onboardStage1User(Stage1OnboardRequest req) {
+    public Stage1UserResponseDTO onboardStage1User(Stage1OnboardRequestDTO req) {
         String userId = "USR-" + (100000 + new Random().nextInt(900000));
-        Stage1UserResponse resp = new Stage1UserResponse(userId, req.orgName(), req.email(), Stage1Status.PENDING_APPROVAL, LocalDateTime.now());
+        Stage1UserResponseDTO resp = new Stage1UserResponseDTO(userId, req.orgName(), req.email(), Stage1Status.PENDING_APPROVAL, LocalDateTime.now());
         stage1Users.put(userId, resp);
         return resp;
     }
 
-    public Stage1UserResponse approveStage1User(String userId) {
-        Stage1UserResponse existing = stage1Users.get(userId);
+    public Stage1UserResponseDTO approveStage1User(String userId) {
+        Stage1UserResponseDTO existing = stage1Users.get(userId);
         if (existing == null) {
-            existing = new Stage1UserResponse(userId, "Freddie Partner Org", "user@partner.com", Stage1Status.PENDING_APPROVAL, LocalDateTime.now());
+            existing = new Stage1UserResponseDTO(userId, "Freddie Partner Org", "user@partner.com", Stage1Status.PENDING_APPROVAL, LocalDateTime.now());
         }
-        Stage1UserResponse approved = new Stage1UserResponse(userId, existing.orgName(), existing.email(), Stage1Status.APPROVED, LocalDateTime.now());
+        Stage1UserResponseDTO approved = new Stage1UserResponseDTO(userId, existing.orgName(), existing.email(), Stage1Status.APPROVED, LocalDateTime.now());
         stage1Users.put(userId, approved);
         return approved;
     }
 
-    public List<Stage1UserResponse> getPendingStage1Users() {
+    public List<Stage1UserResponseDTO> getPendingStage1Users() {
         return new ArrayList<>(stage1Users.values());
     }
 
     // Stage 2 Extended Profile & Access Rights
-    public Stage2AccessRightsResponse saveStage2Profile(Stage2ProfileRequest req) {
+    public Stage2AccessRightsResponseDTO saveStage2Profile(Stage2ProfileRequestDTO req) {
         stage2Profiles.put(req.userId(), req);
         List<String> rights = evaluateAccessRights(req.userType());
-        return new Stage2AccessRightsResponse(req.userId(), req.userType(), rights);
+        return new Stage2AccessRightsResponseDTO(req.userId(), req.userType(), rights);
     }
 
-    public Stage2AccessRightsResponse getStage2AccessRights(String userId) {
-        Stage2ProfileRequest req = stage2Profiles.get(userId);
+    public Stage2AccessRightsResponseDTO getStage2AccessRights(String userId) {
+        Stage2ProfileRequestDTO req = stage2Profiles.get(userId);
         UserType userType = (req != null) ? req.userType() : UserType.HOUSE_BUYER;
-        return new Stage2AccessRightsResponse(userId, userType, evaluateAccessRights(userType));
+        return new Stage2AccessRightsResponseDTO(userId, userType, evaluateAccessRights(userType));
     }
 
     private List<String> evaluateAccessRights(UserType userType) {
@@ -290,8 +376,8 @@ public class LoanOriginationService {
         };
     }
 
-    private LoanResponse mapToResponse(LoanApplicationEntity e) {
-        return new LoanResponse(
+    private LoanResponseDTO mapToResponse(LoanApplicationEntity e) {
+        return new LoanResponseDTO(
             e.getId(),
             e.getCustomerId(),
             e.getApplicantName(),

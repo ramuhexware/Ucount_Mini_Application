@@ -1,45 +1,17 @@
 package com.freddieapp.underwriting;
 
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Info;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.Bean;
 import org.springframework.jms.annotation.EnableJms;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * Entry point for Underwriting, Pricing & Risk Engine Microservice (Port 8083).
  */
 @SpringBootApplication
 @EnableJms
-@EnableWebSecurity
 public class UnderwritingServiceApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(UnderwritingServiceApplication.class, args);
-    }
-
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            .csrf(AbstractHttpConfigurer::disable)
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                .anyRequest().authenticated()
-            );
-        return http.build();
-    }
-
-    @Bean
-    public OpenAPI customOpenAPI() {
-        return new OpenAPI()
-            .info(new Info()
-                .title("Freddie Mac Underwriting & Risk Engine Microservice")
-                .version("1.0.0")
-                .description("Service managing risk scoring, decisioning rule engine, rate pricing, and ActiveMQ notification messaging"));
     }
 }

@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { LoanService, LoanApplication } from './services/loan.service';
+import { LoanService, LoanApplication, PricingQuoteDTO, AmortizationScheduleDTO, NotificationDTO, AccountLookupUpdateDTO } from './services/loan.service';
 import { AuthService } from './services/auth.service';
 import { FilterStatusPipe } from './pipes/filter-status.pipe';
 import { SourceBrowserComponent } from './source-browser/source-browser.component';
@@ -49,9 +49,14 @@ export class AppComponent implements OnInit {
   formMonthlyDebt = 1200;
   formCreditScore = 720;
   
-  // Underwriter Controls
+  // Underwriter Controls & Rate Calculator State
   overrideDecision: 'APPROVED' | 'REJECTED' = 'APPROVED';
   overrideReason = '';
+  pricingQuoteResult: PricingQuoteDTO | null = null;
+  amortizationScheduleResult: AmortizationScheduleDTO | null = null;
+  notificationResult: NotificationDTO | null = null;
+  batchJobResult: any = null;
+  accountLookupResult: AccountLookupUpdateDTO | null = null;
   
   // Document Uploads
   uploadDocType = 'INCOME_PROOF';
@@ -90,6 +95,9 @@ export class AppComponent implements OnInit {
         }
       }
     });
+
+    // Preload Account Lookup & Pricing Quote
+    this.fetchPricingQuote();
   }
 
   get borrowerActiveApp(): LoanApplication | null {
@@ -164,7 +172,6 @@ export class AppComponent implements OnInit {
   selectRole(role: typeof this.activeRole) {
     this.activeRole = role;
     this.addAuditLog(role + '_SESSION', `Switched workspace role to ${role}`);
-    // Auto-adjust default tab based on roles
     if (role === 'Underwriter') this.activeTab = 'underwriting';
     else if (role === 'Compliance') this.activeTab = 'compliance';
     else this.activeTab = 'dashboard';
@@ -178,7 +185,6 @@ export class AppComponent implements OnInit {
     this.selectedApp = app;
   }
 
-  // Dynamic getters for Origination Form
   get computedLtv(): number {
     if (!this.formPropertyValue) return 0;
     return Number(((this.formLoanAmount / this.formPropertyValue) * 100).toFixed(2));
@@ -190,7 +196,6 @@ export class AppComponent implements OnInit {
     return Number(((this.formMonthlyDebt / monthlyIncome) * 100).toFixed(2));
   }
 
-  // Business Actions
   submitApplication() {
     if (!this.formCustomerName) {
       alert('Please provide borrower name.');
@@ -217,7 +222,6 @@ export class AppComponent implements OnInit {
       } else {
         this.activeTab = 'dashboard';
       }
-      // Reset form variables
       this.formCustomerName = '';
       this.formCustomerId = 'CUST-' + Math.floor(100 + Math.random() * 900);
     });
@@ -225,22 +229,26 @@ export class AppComponent implements OnInit {
 
   triggerUnderwriting(app: LoanApplication) {
     this.addAuditLog('AUTOMATED_UW', `Started automated engine evaluation for ${app.loanId}`);
-    
-    // Evaluate rules
-    let decision: 'APPROVED' | 'REJECTED' | 'UNDER_REVIEW' = 'APPROVED';
-    let reason = 'System evaluation passed. Approved under standard portfolio thresholds.';
 
-    if (app.creditScore < 600 || app.dtiRatio > 50 || app.ltvRatio > 95) {
-      decision = 'REJECTED';
-      reason = 'Auto-declined: Score < 600, LTV > 95% or DTI > 50%.';
-    } else if (app.creditScore < 660 || app.dtiRatio > 45 || app.ltvRatio > 90) {
-      decision = 'UNDER_REVIEW';
-      reason = 'Risk parameters referred to Manual Underwriter Override.';
+    const numericId = app.id || parseInt(app.loanId.replace('LN-', ''), 10);
+    if (numericId) {
+      this.loanService.submitForUnderwritingNative(numericId).subscribe(updated => {
+        this.addAuditLog('AUTOMATED_UW', `WebClient + Native SQL Assessment complete for ${app.loanId}: Decision = ${updated.status}`);
+      });
+    } else {
+      let decision: 'APPROVED' | 'REJECTED' | 'UNDER_REVIEW' = 'APPROVED';
+      let reason = 'System evaluation passed. Approved under standard portfolio thresholds.';
+      if (app.creditScore < 600 || app.dtiRatio > 50 || app.ltvRatio > 95) {
+        decision = 'REJECTED';
+        reason = 'Auto-declined: Score < 600, LTV > 95% or DTI > 50%.';
+      } else if (app.creditScore < 660 || app.dtiRatio > 45 || app.ltvRatio > 90) {
+        decision = 'UNDER_REVIEW';
+        reason = 'Risk parameters referred to Manual Underwriter Override.';
+      }
+      this.loanService.updateStatus(app.loanId, decision, reason, 'AUTOMATED_ENGINE').subscribe(() => {
+        this.addAuditLog('AUTOMATED_UW', `Assessment complete for ${app.loanId}: Decision = ${decision}`);
+      });
     }
-
-    this.loanService.updateStatus(app.loanId, decision, reason, 'AUTOMATED_ENGINE').subscribe(() => {
-      this.addAuditLog('AUTOMATED_UW', `Assessment complete for ${app.loanId}: Decision = ${decision}`);
-    });
   }
 
   submitManualOverride(app: LoanApplication) {
@@ -258,12 +266,58 @@ export class AppComponent implements OnInit {
     });
   }
 
+  // Backend Pricing Quote & Amortization Handlers
+  fetchPricingQuote() {
+    const score = this.selectedApp ? this.selectedApp.creditScore : this.formCreditScore;
+    const ltv = this.selectedApp ? this.selectedApp.ltvRatio : this.computedLtv;
+    this.loanService.getPricingQuote(score, ltv).subscribe(quote => {
+      this.pricingQuoteResult = quote;
+      this.addAuditLog('RATE_ENGINE', `Fetched Pricing Quote: Tier ${quote.pricingTier}, Final Rate ${quote.finalInterestRate}%, EMI $${quote.monthlyEmi}`);
+    });
+  }
+
+  fetchAmortization() {
+    const amount = this.selectedApp ? this.selectedApp.loanAmount : this.formLoanAmount;
+    const rate = this.pricingQuoteResult ? this.pricingQuoteResult.finalInterestRate : 6.50;
+    this.loanService.getAmortizationSchedule(amount, rate, 360).subscribe(schedule => {
+      this.amortizationScheduleResult = schedule;
+      this.addAuditLog('AMORTIZATION_ENGINE', `Generated 360-month amortization schedule for $${schedule.loanAmount}`);
+    });
+  }
+
+  publishJmsEvent(eventType: string = 'UNDERWRITING_ASSESSMENT') {
+    const dest = 'freddie.underwriting.events';
+    const payload = JSON.stringify({
+      loanId: this.selectedApp ? this.selectedApp.loanId : 'LN-1082',
+      status: 'ASSESSMENT_COMPLETED',
+      timestamp: new Date().toISOString()
+    });
+    this.loanService.publishJmsNotification(eventType, dest, payload).subscribe(res => {
+      this.notificationResult = res;
+      this.addAuditLog('ACTIVEMQ_JMS', `Dispatched JMS Event to queue '${res.queueName}': EventId ${res.eventId}`);
+    });
+  }
+
+  runControlmPurge() {
+    this.loanService.purgeControlmACR().subscribe(res => {
+      this.batchJobResult = res;
+      this.addAuditLog('CONTROLM_BATCH', `Executed ControlM ACR Purge Job. Purged Records: ${res.purgedRecordsCount}`);
+    });
+  }
+
+  fetchAccountLookup() {
+    this.loanService.getAccountLookupUpdate().subscribe(res => {
+      this.accountLookupResult = res;
+      this.addAuditLog('ACCOUNT_LOOKUP', `Fetched Account Lookup Update DTO with ${res.ucsLineOfBusinessDTOs?.length || 0} Lines of Business`);
+    });
+  }
+
   onFileSelected(event: any) {
     const element = event.currentTarget as HTMLInputElement;
     const fileList = element.files;
     if (fileList && fileList.length > 0) {
       const file = fileList[0];
-      const maxSizeBytes = 50 * 1024 * 1024; // 50MB limit
+      const maxSizeBytes = 50 * 1024 * 1024;
       if (file.size > maxSizeBytes) {
         alert('File size exceeds the 50MB limit. Please select a smaller document.');
         this.selectedFile = null;
