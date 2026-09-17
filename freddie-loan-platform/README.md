@@ -952,9 +952,9 @@ The entire backend codebase across both microservices consists of **EXACTLY 61 J
 
 ---
 
-### ⚙️ Module 2: `underwriting-service` (Port 8083 - 27 Java Files)
+### ⚙️ Module 2: `underwriting-service` (Port 8083 - 28 Java Files)
 
-#### 🔹 Core Component & Business Logic Files (15 Files)
+#### 🔹 Core Component & Business Logic Files (19 Files)
 | # | Class Name & Path | Design Pattern / Layer | Primary Responsibility |
 |---|---|---|---|
 | 1 | [UnderwritingServiceApplication.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/UnderwritingServiceApplication.java) | Spring Boot Application | Entry point for Port 8083 microservice and ActiveMQ JMS configuration. |
