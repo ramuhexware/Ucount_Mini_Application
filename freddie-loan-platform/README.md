@@ -6,7 +6,7 @@
 [![Angular 15](https://img.shields.io/badge/Angular-15.2.0-red.svg)](https://angular.io/)
 [![License: Enterprise](https://img.shields.io/badge/License-Freddie%20Mac%20Enterprise-red.svg)]()
 
-Welcome to the **Freddie Mac Home Loan Platform** (UCount Mini Application) — a streamlined, high-performance enterprise 2-microservice ecosystem built with **Java 17**, **Spring Boot 3.1.3**, **ActiveMQ JMS**, **PostgreSQL**, and **Angular 15**, optimized into **EXACTLY 10 Java Files** while maintaining 100% of architectural design patterns and functional business flows.
+Welcome to the **Freddie Mac Home Loan Platform** (UCount Mini Application) — a streamlined, high-performance enterprise 2-microservice ecosystem built with **Java 17**, **Spring Boot 3.1.3**, **ActiveMQ JMS**, **PostgreSQL**, and **Angular 15**, structured across **62 Java Files** maintaining 100% of architectural design patterns, tier separation, and functional business flows.
 
 ---
 
@@ -97,37 +97,37 @@ The application incorporates **8 primary functional business flows** representin
 
 ```mermaid
 flowchart TD
-    subgraph Flow 1: Auth & OAuth Security
-        A1[User Credentials Login] --> A2[Generate Bearer JWT Access Token]
+    subgraph F1 ["Flow 1: Auth & OAuth Security"]
+        A1["User Credentials Login"] --> A2["Generate Bearer JWT Access Token"]
     end
-    subgraph Flow 2: Stage 1 & 2 Counterparty Intake
-        B1[Stage 1 Onboarding Request] --> B2[Approve Stage 1 User]
-        B2 --> B3[Stage 2 Profile & Access Rights Switch]
+    subgraph F2 ["Flow 2: Stage 1 & 2 Counterparty Intake"]
+        B1["Stage 1 Onboarding Request"] --> B2["Approve Stage 1 User"]
+        B2 --> B3["Stage 2 Profile & Access Rights Switch"]
     end
-    subgraph Flow 3: Account Lookup, Create & Async OIM Sync
-        C1[Fetch Account Lookup Update DTO] --> C2[Save Counterparty Account]
-        C2 --> C3[@Async oimDataSyncThreadPool WebClient Sync]
-        C3 --> C4[Save Error Table on Exception]
+    subgraph F3 ["Flow 3: Account Lookup, Create & Async OIM Sync"]
+        C1["Fetch Account Lookup Update DTO"] --> C2["Save Counterparty Account"]
+        C2 --> C3["@Async oimDataSyncThreadPool WebClient Sync"]
+        C3 --> C4["Save Error Table on Exception"]
     end
-    subgraph Flow 4: Relationship Expiration & Seller-Ctos Servicer
-        D1[Check Active Account Relationships] --> D2{Relationship ID == 25?}
-        D2 -->|Yes| D3[Log SELLER-SERVICER-DISCONTINUE-CTOS & Expire]
-        D2 -->|No| D4[Expire Account Functional Roles]
+    subgraph F4 ["Flow 4: Relationship Expiration & Seller-Ctos Servicer"]
+        D1["Check Active Account Relationships"] --> D2{"Relationship ID == 25?"}
+        D2 -->|Yes| D3["Log SELLER-SERVICER-DISCONTINUE-CTOS & Expire"]
+        D2 -->|No| D4["Expire Account Functional Roles"]
     end
-    subgraph Flow 5: Loan Origination & Reactive WebClient Underwriting Trigger
-        E1[Submit Mortgage Application] --> E2[Execute PostgreSQL Native Query UPDATE]
-        E2 --> E3[Reactive WebClient POST to Underwriting Service]
-        E3 --> E4[Update Final Status via Native SQL Query]
+    subgraph F5 ["Flow 5: Loan Origination & Reactive WebClient Underwriting Trigger"]
+        E1["Submit Mortgage Application"] --> E2["Execute PostgreSQL Native Query UPDATE"]
+        E2 --> E3["Reactive WebClient POST to Underwriting Service"]
+        E3 --> E4["Update Final Status via Native SQL Query"]
     end
-    subgraph Flow 6: Automated Underwriting & WebClient Loan Lookup
-        F1[WebClient GET Enriched Loan Details] --> F2[Java 17 Switch Underwriting Assessment]
-        F2 --> F3[Calculate Tiered Rate, EMI & 360-Mo Amortization]
+    subgraph F6 ["Flow 6: Automated Underwriting & WebClient Loan Lookup"]
+        F1["WebClient GET Enriched Loan Details"] --> F2["Java 17 Switch Underwriting Assessment"]
+        F2 --> F3["Calculate Tiered Rate, EMI & 360-Mo Amortization"]
     end
-    subgraph Flow 7: ControlM ACR Purge & BatchJob Controller
-        G1[ControlM ACR Batch Purge] --> G2[Execute Batch Status / History Endpoint with inMap Binding]
+    subgraph F7 ["Flow 7: ControlM ACR Purge & BatchJob Controller"]
+        G1["ControlM ACR Batch Purge"] --> G2["Execute Batch Status / History Endpoint with inMap Binding"]
     end
-    subgraph Flow 8: ActiveMQ JMS Event Publishing & UUID Tracking
-        H1[Serialize MainEventDTO with UUID] --> H2[Publish Message to ActiveMQ Queue]
+    subgraph F8 ["Flow 8: ActiveMQ JMS Event Publishing & UUID Tracking"]
+        H1["Serialize MainEventDTO with UUID"] --> H2["Publish Message to ActiveMQ Queue"]
     end
 
     A2 --> B1 --> C1 --> D1 --> E1 --> F1 --> G1 --> H1
@@ -209,7 +209,7 @@ flowchart TD
 - **Controller/Publisher**: `UnderwritingController.java` -> `NotificationJmsPublisher.java`
 - **Configuration**: `application.properties` -> `freddie.underwriting.jms.destination=freddie.underwriting.events`
 - **Functional Description**:
-  - Injects `freddie.underwriting.jms.destination` via `@Value("${freddie.underwriting.jms.destination:freddie.underwriting.events}")`.
+  - Injects `freddie.underwriting.jms.destination` via `@Value("${freddie.underwriting.jms.destination}")`.
   - Generates event UUIDs (`java.util.UUID.randomUUID()`) for real-time events.
   - Saves initial event tracker (`saveEventTracker`), serializes payload (`objectMapper.writeValueAsString`), logs `"converted DTO to string"`, and dispatches message via Spring `JmsTemplate.convertAndSend` to the injected destination queue.
 
@@ -307,40 +307,40 @@ The **Freddie Mac Home Loan Platform** implements a strict 6-tier end-to-end arc
 
 ```mermaid
 flowchart TD
-    subgraph Tier 1: UI Frontend Layer (Angular 15 - Port 4200)
-        UI_FORM[Angular HTML Forms & Reactive Components<br/>app.component.html / app.component.ts] --> UI_SVC[LoanService & AuthService<br/>frontend/src/app/services/loan.service.ts]
-        UI_SVC --> UI_INT[AuthInterceptor<br/>Injects Bearer JWT Authorization Header]
+    subgraph T1 ["Tier 1: UI Frontend Layer (Angular 15 - Port 4200)"]
+        UI_FORM["Angular HTML Forms & Reactive Components<br/>app.component.html / app.component.ts"] --> UI_SVC["LoanService & AuthService<br/>frontend/src/app/services/loan.service.ts"]
+        UI_SVC --> UI_INT["AuthInterceptor<br/>Injects Bearer JWT Authorization Header"]
     end
 
-    subgraph Tier 2: API Gateway & Network Proxy Layer
-        UI_INT -->|HTTP REST Requests| PROXY[Angular Reverse Proxy<br/>proxy.conf.json -> Route to 8082 / 8083]
+    subgraph T2 ["Tier 2: API Gateway & Network Proxy Layer"]
+        UI_INT -->|HTTP REST Requests| PROXY["Angular Reverse Proxy<br/>proxy.conf.json -> Route to 8082 / 8083"]
     end
 
-    subgraph Tier 3: Security & Controller Layer (Spring Boot REST)
-        PROXY -->|Port 8082| SEC_ORIG[JwtAuthenticationFilter & SecurityConfig]
-        PROXY -->|Port 8083| SEC_UW[UnderwritingSecurityFilter & SecurityConfig]
-        SEC_ORIG --> CTRL_ORIG[LoanOriginationController<br/>@RestController /api/v1/loans, /counterparty, /account]
-        SEC_UW --> CTRL_UW[UnderwritingController<br/>@RestController /api/v1/underwriting, /rates, /jobs, /notifications]
+    subgraph T3 ["Tier 3: Security & Controller Layer (Spring Boot REST)"]
+        PROXY -->|Port 8082| SEC_ORIG["JwtAuthenticationFilter & SecurityConfig"]
+        PROXY -->|Port 8083| SEC_UW["UnderwritingSecurityFilter & SecurityConfig"]
+        SEC_ORIG --> CTRL_ORIG["LoanOriginationController<br/>@RestController /api/v1/loans, /counterparty, /account"]
+        SEC_UW --> CTRL_UW["UnderwritingController<br/>@RestController /api/v1/underwriting, /rates, /jobs, /notifications"]
     end
 
-    subgraph Tier 4: Service & Business Rule Engine Layer
-        CTRL_ORIG --> SVC_ORIG[LoanOriginationService<br/>• Stage 1 & 2 Access Rights Switch<br/>• Relationship Expiration Logic<br/>• Reactive WebClient Trigger]
-        CTRL_ORIG -->|@Async Thread Pool| ASYNC_OIM[oimDataSyncThreadPool<br/>WebClient Async Identity Sync]
+    subgraph T4 ["Tier 4: Service & Business Rule Engine Layer"]
+        CTRL_ORIG --> SVC_ORIG["LoanOriginationService<br/>• Stage 1 & 2 Access Rights Switch<br/>• Relationship Expiration Logic<br/>• Reactive WebClient Trigger"]
+        CTRL_ORIG -->|@Async Thread Pool| ASYNC_OIM["oimDataSyncThreadPool<br/>WebClient Async Identity Sync"]
         
-        CTRL_UW --> UW_RULE[UnderwritingRuleProcessor<br/>Java 17 Switch Pattern Risk Engine]
-        CTRL_UW --> UW_MATH[RateCalculatorProcessor<br/>Financial Math Tier & Amortization Engine]
+        CTRL_UW --> UW_RULE["UnderwritingRuleProcessor<br/>Java 17 Switch Pattern Risk Engine"]
+        CTRL_UW --> UW_MATH["RateCalculatorProcessor<br/>Financial Math Tier & Amortization Engine"]
     end
 
-    subgraph Tier 5: Data Access & Messaging Layer (JPA & JMS)
-        SVC_ORIG --> REPO_ORIG[LoanApplicationRepository<br/>• Spring Data JPA ORM<br/>• PostgreSQL Native @Query UPDATE]
-        UW_RULE --> REPO_UW[UnderwritingAuditRepository<br/>JPA Audit Logging]
-        CTRL_UW --> JMS_PUB[NotificationJmsPublisher<br/>Spring JmsTemplate Event Publisher]
+    subgraph T5 ["Tier 5: Data Access & Messaging Layer (JPA & JMS)"]
+        SVC_ORIG --> REPO_ORIG["LoanApplicationRepository<br/>• Spring Data JPA ORM<br/>• PostgreSQL Native @Query UPDATE"]
+        UW_RULE --> REPO_UW["UnderwritingAuditRepository<br/>JPA Audit Logging"]
+        CTRL_UW --> JMS_PUB["NotificationJmsPublisher<br/>Spring JmsTemplate Event Publisher"]
     end
 
-    subgraph Tier 6: Persistence & Event Broker Layer
-        REPO_ORIG -->|PostgreSQL Driver| DB_LOANS[(PostgreSQL Database<br/>Schema: freddie_loans<br/>Table: loan_applications)]
-        REPO_UW -->|PostgreSQL Driver| DB_UW[(PostgreSQL Database<br/>Schema: freddie_uw<br/>Table: underwriting_audit_logs)]
-        JMS_PUB -->|JMS ActiveMQ Connection| MQ_QUEUE[[ActiveMQ Message Broker<br/>Queue: freddie.underwriting.events]]
+    subgraph T6 ["Tier 6: Persistence & Event Broker Layer"]
+        REPO_ORIG -->|PostgreSQL Driver| DB_LOANS[("PostgreSQL Database<br/>Schema: freddie_loans<br/>Table: loan_applications")]
+        REPO_UW -->|PostgreSQL Driver| DB_UW[("PostgreSQL Database<br/>Schema: freddie_uw<br/>Table: underwriting_audit_logs")]
+        JMS_PUB -->|JMS ActiveMQ Connection| MQ_QUEUE[["ActiveMQ Message Broker<br/>Queue: freddie.underwriting.events"]]
     end
 ```
 
@@ -507,32 +507,32 @@ This section details the internal **Java class-by-class invocation chain**, meth
 
 ```mermaid
 flowchart LR
-    subgraph Layer A: REST Controller
-        C1[LoanOriginationController<br/>@RestController /api/v1]
-        C2[UnderwritingController<br/>@RestController /api/v1]
+    subgraph LA ["Layer A: REST Controller"]
+        C1["LoanOriginationController<br/>@RestController /api/v1"]
+        C2["UnderwritingController<br/>@RestController /api/v1"]
     end
 
-    subgraph Layer B: Service & Business Logic
-        S1[LoanOriginationService<br/>@Service @Transactional]
-        S2[UnderwritingService<br/>@Service @Transactional]
+    subgraph LB ["Layer B: Service & Business Logic"]
+        S1["LoanOriginationService<br/>@Service @Transactional"]
+        S2["UnderwritingService<br/>@Service @Transactional"]
     end
 
-    subgraph Layer C: Rule Engine & Math Processors
-        P1[UnderwritingRuleProcessor<br/>Java 17 Switch Pattern Engine]
-        P2[RateCalculatorProcessor<br/>Financial Math Tier Strategy]
+    subgraph LC ["Layer C: Rule Engine & Math Processors"]
+        P1["UnderwritingRuleProcessor<br/>Java 17 Switch Pattern Engine"]
+        P2["RateCalculatorProcessor<br/>Financial Math Tier Strategy"]
     end
 
-    subgraph Layer D: Repository & Data Access
-        R1[LoanApplicationRepository<br/>JpaRepository + Native SQL @Query]
-        R2[UnderwritingAuditRepository<br/>JpaRepository]
-        JMS[NotificationJmsPublisher<br/>Spring JmsTemplate]
+    subgraph LD ["Layer D: Repository & Data Access"]
+        R1["LoanApplicationRepository<br/>JpaRepository + Native SQL @Query"]
+        R2["UnderwritingAuditRepository<br/>JpaRepository"]
+        JMS["NotificationJmsPublisher<br/>Spring JmsTemplate"]
     end
 
-    subgraph Layer E: JPA Entity & Persistence
-        E1[LoanApplicationEntity<br/>@Entity loan_applications]
-        E2[UnderwritingAuditLogEntity<br/>@Entity underwriting_audit_logs]
-        DB[(PostgreSQL Database<br/>freddie_loans / freddie_uw)]
-        MQ[[ActiveMQ JMS Queue<br/>freddie.underwriting.events]]
+    subgraph LE ["Layer E: JPA Entity & Persistence"]
+        E1["LoanApplicationEntity<br/>@Entity loan_applications"]
+        E2["UnderwritingAuditLogEntity<br/>@Entity underwriting_audit_logs"]
+        DB[("PostgreSQL Database<br/>freddie_loans / freddie_uw")]
+        MQ[["ActiveMQ JMS Queue<br/>freddie.underwriting.events"]]
     end
 
     C1 -->|1. createLoan / submitUnderwriting| S1
@@ -650,7 +650,7 @@ flowchart LR
    - **Action**: Passes `eventType`, `destination`, and `payloadJson` to publisher.
 
 2. **JMS Publisher Component Layer**: [NotificationJmsPublisher.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/messaging/NotificationJmsPublisher.java)
-   - **Spring Beans**: Injects `JmsTemplate` and `@Value("${freddie.underwriting.jms.destination:freddie.underwriting.events}")`.
+   - **Spring Beans**: Injects `JmsTemplate` and `@Value("${freddie.underwriting.jms.destination}")`.
    - **Method**: `public NotificationDTO publishNotification(String eventType, String destination, String payloadJson)`
    - **Step 1**: Generates UUID: `String eventId = UUID.randomUUID().toString()`.
    - **Step 2**: Wraps payload into `MainEventDTO` object.
@@ -902,7 +902,7 @@ public List<String> publishEventToQueue(String eventTypeName, String orgId, Stri
 
 ---
 
-## 5. 📂 Complete Inventory of 61 Java Files Across Both Microservices
+## 5. 📂 Complete Inventory of 62 Java Files Across Both Microservices
 
 The entire backend codebase across both microservices consists of **EXACTLY 61 Java Files** implementing clean enterprise tier separation:
 
@@ -954,27 +954,28 @@ The entire backend codebase across both microservices consists of **EXACTLY 61 J
 
 ### ⚙️ Module 2: `underwriting-service` (Port 8083 - 27 Java Files)
 
-#### 🔹 Core Component & Business Logic Files (18 Files)
+#### 🔹 Core Component & Business Logic Files (15 Files)
 | # | Class Name & Path | Design Pattern / Layer | Primary Responsibility |
 |---|---|---|---|
-| 16 | [UnderwritingServiceApplication.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/UnderwritingServiceApplication.java) | Spring Boot Application | Entry point for Port 8083 microservice and ActiveMQ JMS configuration. |
-| 17 | [UnderwritingController.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/controller/UnderwritingController.java) | REST Controller Layer | Handles endpoints for `/underwriting/*`, `/rates/*`, `/jobs/*`, and `/notifications/*`. |
-| 18 | [UnderwritingService.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/service/UnderwritingService.java) | Business Service Layer | Orchestrates WebClient loan detail fetching, risk rule evaluation, and audit log persistence. |
-| 19 | [UnderwritingRuleProcessor.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/processor/UnderwritingRuleProcessor.java) | Business Rule Engine | **Java 17 Switch Pattern Matching Engine** evaluating credit score, DTI, and LTV (`APPROVED`/`REFERRED`/`DECLINED`). |
-| 20 | [RateCalculatorProcessor.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/processor/RateCalculatorProcessor.java) | Financial Math Engine | Calculates pricing quotes, EMI, interest rates (`PRIME`, `NEAR_PRIME`), and 360-mo amortization schedules. |
-| 21 | [NotificationJmsPublisher.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/messaging/NotificationJmsPublisher.java) | JMS Publisher Pattern | Generates event UUIDs, serializes JSON via Jackson, and dispatches messages to ActiveMQ queue. |
-| 22 | [UnderwritingAuditRepository.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/repository/UnderwritingAuditRepository.java) | Repository Layer | Spring Data JPA repository for persisting underwriting audit records. |
-| 23 | [UnderwritingAuditLogEntity.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/domain/UnderwritingAuditLogEntity.java) | JPA Domain Entity | Mapped to PostgreSQL table `freddie_uw.underwriting_audit_logs`. |
-| 24 | [AuthController.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/auth/AuthController.java) | REST Controller Layer | Authentication endpoint controller for Underwriting Service. |
-| 25 | [UnderwritingSecurityFilter.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/filter/UnderwritingSecurityFilter.java) | Security Filter Layer | OncePerRequest filter inspecting HTTP Bearer headers for underwriting requests. |
-| 26 | [SecurityConfig.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/config/SecurityConfig.java) | Spring Security Config | Configures Spring Security chain and CORS/CSRF settings. |
-| 27 | [UnderwritingCache.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/cache/UnderwritingCache.java) | Cache Layer Component | In-memory cache storing risk thresholds and interest rate benchmarks. |
-| 28 | [WebClientConfig.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/config/WebClientConfig.java) | Configuration Component | Defines reactive `WebClient` bean for external REST communication. |
-| 29 | [RestClientConfig.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/config/RestClientConfig.java) | Configuration Component | Configures RestClient bean for synchronous REST communication. |
-| 30 | [AmortizationPdfExporter.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/pdf/AmortizationPdfExporter.java) | Document Exporter | Generates 360-month amortization schedule PDF reports using iText. |
-| 31 | [FinancialMathUtil.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/util/FinancialMathUtil.java) | Utility Helper | Financial compounding math utility for EMI and amortization calculations. |
-| 32 | [UcsApiUtil.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/util/UcsApiUtil.java) | Utility Helper | Standardizes API response status payloads and error wrappers. |
-| 33 | [UnderwritingException.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/exception/UnderwritingException.java) | Custom Exception | Custom runtime exception handling underwriting and batch execution errors. |
+| 1 | [UnderwritingServiceApplication.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/UnderwritingServiceApplication.java) | Spring Boot Application | Entry point for Port 8083 microservice and ActiveMQ JMS configuration. |
+| 2 | [UnderwritingController.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/controller/UnderwritingController.java) | REST Controller Layer | Handles endpoints for `/underwriting/*`, `/rates/*`, `/jobs/*`, and `/notifications/*`. |
+| 3 | [UnderwritingService.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/service/UnderwritingService.java) | Business Service Layer | Orchestrates WebClient loan detail fetching, risk rule evaluation, and audit log persistence. |
+| 4 | [UnderwritingRuleProcessor.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/processor/UnderwritingRuleProcessor.java) | Business Rule Engine | **Java 17 Switch Pattern Matching Engine** evaluating credit score, DTI, and LTV (`APPROVED`/`REFERRED`/`DECLINED`). |
+| 5 | [RateCalculatorProcessor.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/processor/RateCalculatorProcessor.java) | Financial Math Engine | Calculates pricing quotes, EMI, interest rates (`PRIME`, `NEAR_PRIME`), and 360-mo amortization schedules. |
+| 6 | [NotificationJmsPublisher.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/messaging/NotificationJmsPublisher.java) | JMS Publisher Pattern | Generates event UUIDs, serializes JSON via Jackson, and dispatches messages to ActiveMQ queue. |
+| 7 | [NotificationJmsListener.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/messaging/NotificationJmsListener.java) | JMS Listener Pattern | Listens to `@JmsListener` destination queue `freddie.underwriting.events` and logs event payloads. |
+| 8 | [UnderwritingAuditRepository.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/repository/UnderwritingAuditRepository.java) | Repository Layer | Spring Data JPA repository for persisting underwriting audit records. |
+| 9 | [UnderwritingAuditLogEntity.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/domain/UnderwritingAuditLogEntity.java) | JPA Domain Entity | Mapped to PostgreSQL table `freddie_uw.underwriting_audit_logs`. |
+| 10 | [AuthController.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/auth/AuthController.java) | REST Controller Layer | Authentication endpoint controller for Underwriting Service. |
+| 11 | [UnderwritingSecurityFilter.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/filter/UnderwritingSecurityFilter.java) | Security Filter Layer | OncePerRequest filter inspecting HTTP Bearer headers for underwriting requests. |
+| 12 | [SecurityConfig.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/config/SecurityConfig.java) | Spring Security Config | Configures Spring Security chain and CORS/CSRF settings. |
+| 13 | [UnderwritingCache.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/cache/UnderwritingCache.java) | Cache Layer Component | In-memory cache storing risk thresholds and interest rate benchmarks. |
+| 14 | [WebClientConfig.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/config/WebClientConfig.java) | Configuration Component | Defines reactive `WebClient` bean for external REST communication. |
+| 15 | [RestClientConfig.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/config/RestClientConfig.java) | Configuration Component | Configures RestClient bean for synchronous REST communication. |
+| 16 | [AmortizationPdfExporter.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/pdf/AmortizationPdfExporter.java) | Document Exporter | Generates 360-month amortization schedule PDF reports using iText. |
+| 17 | [FinancialMathUtil.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/util/FinancialMathUtil.java) | Utility Helper | Financial compounding math utility for EMI and amortization calculations. |
+| 18 | [UcsApiUtil.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/util/UcsApiUtil.java) | Utility Helper | Standardizes API response status payloads and error wrappers. |
+| 19 | [UnderwritingException.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/exception/UnderwritingException.java) | Custom Exception | Custom runtime exception handling underwriting and batch execution errors. |
 
 #### 🔸 Data Transfer Objects (DTOs) & Records (9 Files)
 - `AmortizationScheduleDTO.java`: Record holding monthly payment schedule details and breakdown.

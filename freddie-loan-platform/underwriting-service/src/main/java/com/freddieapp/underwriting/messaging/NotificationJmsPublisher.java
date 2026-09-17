@@ -26,7 +26,7 @@ public class NotificationJmsPublisher {
     private final JmsTemplate jmsTemplate;
     private final ObjectMapper objectMapper;
 
-    @Value("${freddie.underwriting.jms.destination:freddie.underwriting.events}")
+    @Value("${freddie.underwriting.jms.destination}")
     private String jmsDestination;
 
     @Autowired

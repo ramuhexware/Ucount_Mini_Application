@@ -32,19 +32,19 @@ public class RestClientConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(RestClientConfig.class);
 
-    @Value("${edAdaptorAuthId:sailpoint_user_id}")
+    @Value("${edAdaptorAuthId}")
     private String edAdaptorAuthId;
 
-    @Value("${edAdaptorAuthPwd:sailpoint_password}")
+    @Value("${edAdaptorAuthPwd}")
     private String edAdaptorAuthPwd;
 
-    @Value("${tamCredFileLoc:/config/tam_credentials.properties}")
+    @Value("${tamCredFileLoc}")
     private String tamCredFileLoc;
 
-    @Value("${macVaultKeyFilePath:/config/macvault.key}")
+    @Value("${macVaultKeyFilePath}")
     private String macVaultKeyFilePath;
 
-    @Value("${isApiMacVaultEnable:true}")
+    @Value("${isApiMacVaultEnable}")
     private boolean isApiMacVaultEnable;
 
     @Bean

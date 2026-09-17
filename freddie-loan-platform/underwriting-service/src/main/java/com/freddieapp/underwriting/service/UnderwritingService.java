@@ -31,7 +31,7 @@ public class UnderwritingService {
     private final UnderwritingAuditRepository auditRepository;
     private final WebClient webClient;
 
-    @Value("${originationServiceURL:http://localhost:8082/api/v1}")
+    @Value("${originationServiceURL}")
     private String originationServiceURL;
 
     @Autowired

@@ -34,13 +34,13 @@ public class LoanOriginationService {
     private final OAuthTokenCache oAuthTokenCache;
     private final WebClient webClient;
 
-    @Value("${dataServiceURL:http://localhost:8082/api/v1}")
+    @Value("${dataServiceURL}")
     private String dataServiceURL;
 
-    @Value("${underwritingServiceURL:http://localhost:8083/api/v1}")
+    @Value("${underwritingServiceURL}")
     private String underwritingServiceURL;
 
-    @Value("${byPassOimSync:false}")
+    @Value("${byPassOimSync}")
     private boolean byPassOimSync;
 
     private final long apiRetriesMax = 3L;
@@ -245,7 +245,7 @@ public class LoanOriginationService {
 
     private void updateOimDatabaseOnNameUpdate(String idCntprtyAcct) {
         LOGGER.info("Org API: OIM Database Sync triggered for counterparty account: {}", idCntprtyAcct);
-        String targetUrl = dataServiceURL + "/account/update-family/" + idCntprtyAcct;
+        String targetUrl = dataServiceURL + "/account/lookup";
         performOimSyncGet(targetUrl, idCntprtyAcct, "FAMILY_NAME_UPDATE", String.class);
     }
 
