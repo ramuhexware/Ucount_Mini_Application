@@ -63,9 +63,8 @@ public class NotificationJmsPublisher {
             throw new RuntimeException(e);
         }
 
-        String targetQueue = (destination != null && !destination.isBlank()) ? destination : jmsDestination;
         try {
-            jmsTemplate.convertAndSend(targetQueue, message);
+            jmsTemplate.convertAndSend(jmsDestination, message);
             LOGGER.info("Sent message to queue for orgId: {} {}", orgId, message);
             returnMessage.add("Message sent to the queue successfully for Org: " + orgId);
         } catch (JmsException ex) {
