@@ -900,27 +900,92 @@ public List<String> publishEventToQueue(String eventTypeName, String orgId, Stri
 
 ---
 
-## 5. 📂 Complete List of 10 Java Files (2 Microservices)
+---
 
-The entire backend codebase across both microservices consists of **EXACTLY 10 Java Files**:
+## 5. 📂 Complete Inventory of 61 Java Files Across Both Microservices
 
-### 📦 Module 1: `loan-origination-service` (Port 8082)
-| # | File Path | Design Pattern / Primary Responsibility |
-|---|---|---|
-| 1 | [LoanOriginationApplication.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/LoanOriginationApplication.java) | Spring Boot Application Entry & Security Configuration |
-| 2 | [LoanApplicationEntity.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/domain/LoanApplicationEntity.java) | JPA Entity (`loan_applications`), Account Lookup/Update DTOs & Stage 1/2 Records |
-| 3 | [LoanApplicationRepository.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/repository/LoanApplicationRepository.java) | **Dual Data Access**: Spring Data ORM + PostgreSQL `@Query(nativeQuery = true)` |
-| 4 | [LoanOriginationService.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/service/LoanOriginationService.java) | Business Service Layer, Async OIM Sync, Relationship Expiration & Stage 1/2 Intake |
-| 5 | [LoanOriginationController.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/controller/LoanOriginationController.java) | REST Controller Layer with `@InitBinder` and Exception Handler |
+The entire backend codebase across both microservices consists of **EXACTLY 61 Java Files** implementing clean enterprise tier separation:
 
-### ⚙️ Module 2: `underwriting-service` (Port 8083)
-| # | File Path | Design Pattern / Primary Responsibility |
-|---|---|---|
-| 6 | [UnderwritingServiceApplication.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/UnderwritingServiceApplication.java) | Spring Boot Entry, Security, and ActiveMQ JMS Configuration |
-| 7 | [UnderwritingRuleProcessor.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/processor/UnderwritingRuleProcessor.java) | **Java 17 Switch Expressions Rule Engine** (`APPROVED`/`REFERRED`/`DECLINED`) |
-| 8 | [RateCalculatorProcessor.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/processor/RateCalculatorProcessor.java) | **Strategy Math Engine** for pricing tiers, EMI, and 360-mo amortization |
-| 9 | [NotificationJmsPublisher.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/messaging/NotificationJmsPublisher.java) | **JMS Event Publisher Pattern** with UUID Generation & ObjectMapper string conversion |
-| 10 | [UnderwritingController.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/controller/UnderwritingController.java) | REST Controller for `/underwriting/assess`, `/rates/*`, `/jobs/{jobName}/*`, `/notifications/*` |
+---
+
+### 📦 Module 1: `loan-origination-service` (Port 8082 - 34 Java Files)
+
+#### 🔹 Core Component & Business Logic Files (15 Files)
+| # | Class Name & Path | Design Pattern / Layer | Primary Responsibility |
+|---|---|---|---|
+| 1 | [LoanOriginationApplication.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/LoanOriginationApplication.java) | Spring Boot Application | Main entry point for Port 8082 microservice. |
+| 2 | [LoanOriginationController.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/controller/LoanOriginationController.java) | REST Controller Layer | Handles endpoints for `/loans/*`, `/account/*`, and `/counterparty/*`. |
+| 3 | [LoanOriginationService.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/service/LoanOriginationService.java) | Business Service Layer | Implements mortgage creation, native SQL updates, async OIM sync, and relationship expiration. |
+| 4 | [LoanApplicationRepository.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/repository/LoanApplicationRepository.java) | Repository (Spring Data JPA) | **Dual Data Access**: Spring Data ORM + PostgreSQL `@Query(nativeQuery = true)`. |
+| 5 | [LoanApplicationEntity.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/domain/LoanApplicationEntity.java) | JPA Domain Entity | Mapped to PostgreSQL table `freddie_loans.loan_applications`. |
+| 6 | [AuthController.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/auth/AuthController.java) | REST Controller Layer | Endpoint handler for `/api/v1/auth/login`. |
+| 7 | [JwtAuthenticationFilter.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/filter/JwtAuthenticationFilter.java) | Security Filter Layer | Intercepts HTTP requests to extract and log `Authorization: Bearer` headers. |
+| 8 | [SecurityConfig.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/config/SecurityConfig.java) | Spring Security Config | Configures `SecurityFilterChain`, CORS, and CSRF settings. |
+| 9 | [OAuthTokenCache.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/cache/OAuthTokenCache.java) | Cache Layer Component | Supplies valid OAuth access tokens for inter-service WebClient calls. |
+| 10 | [WebClientConfig.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/config/WebClientConfig.java) | Configuration Component | Defines reactive Spring `WebClient` bean for inter-service REST calls. |
+| 11 | [RestClientConfig.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/config/RestClientConfig.java) | Configuration Component | Configures RestClient bean and Sailpoint OpenAPI documentation tags. |
+| 12 | [LoanSummaryPdfExporter.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/pdf/LoanSummaryPdfExporter.java) | Document Exporter | Generates downloadable PDF summaries of mortgage applications using iText. |
+| 13 | [DateUtil.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/util/DateUtil.java) | Utility Helper | Date formatting, validation, and conversion helper methods. |
+| 14 | [UcsApiUtil.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/util/UcsApiUtil.java) | Utility Helper | Formats standardized API response payloads and envelope structures. |
+| 15 | [UcsApiException.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/loan-origination-service/src/main/java/com/freddieapp/origination/exception/UcsApiException.java) | Custom Exception | Custom runtime exception for API error handling and HTTP status propagation. |
+
+#### 🔸 Data Transfer Objects (DTOs), Records & Enums (19 Files)
+- `AccountLookupDTO.java`: DTO for account lookup requests.
+- `AccountLookupUpdateDTO.java`: DTO holding product arrays, line of business, and role lists.
+- `AccountProfileReqDTO.java`: Request DTO for updating account profiles.
+- `AccountProfileRespDTO.java`: Response DTO for account profile updates.
+- `AccountSaveDTO.java`: DTO for saving counterparty account information.
+- `AuthResponseDTO.java`: Response DTO returning JWT access token and user claims.
+- `LoanRequestDTO.java`: Request DTO for submitting new mortgage applications.
+- `LoanResponseDTO.java`: Response DTO returning created loan details.
+- `LoginRequestDTO.java`: Request DTO containing login username and password.
+- `ResponseStatusDTO.java`: Envelope DTO for standard API status responses.
+- `Stage1OnboardRequestDTO.java`: Request DTO for Stage 1 partner onboarding.
+- `Stage1Status.java`: Enum representing Stage 1 onboarding status (`PENDING_APPROVAL`, `APPROVED`, `REJECTED`).
+- `Stage1UserResponseDTO.java`: Response DTO returning Stage 1 onboarded partner details.
+- `Stage2AccessRightsResponseDTO.java`: Response DTO returning resolved Stage 2 permissions list.
+- `Stage2ProfileRequestDTO.java`: Request DTO containing Stage 2 user type profile assignment.
+- `UcsLineOfBusinessDTO.java`: DTO representing a Line of Business (LOB).
+- `UcsOrgtnRoleDTO.java`: DTO representing an Organization Role.
+- `UcsProdtDTO.java`: DTO representing a Mortgage Product.
+- `UserType.java`: Enum defining Stage 2 User Types (`HOUSE_SELLER`, `HOUSE_BUYER`, `INSURANCE_PERSON`, `MORTGAGE_SERVICER`).
+
+---
+
+### ⚙️ Module 2: `underwriting-service` (Port 8083 - 27 Java Files)
+
+#### 🔹 Core Component & Business Logic Files (18 Files)
+| # | Class Name & Path | Design Pattern / Layer | Primary Responsibility |
+|---|---|---|---|
+| 16 | [UnderwritingServiceApplication.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/UnderwritingServiceApplication.java) | Spring Boot Application | Entry point for Port 8083 microservice and ActiveMQ JMS configuration. |
+| 17 | [UnderwritingController.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/controller/UnderwritingController.java) | REST Controller Layer | Handles endpoints for `/underwriting/*`, `/rates/*`, `/jobs/*`, and `/notifications/*`. |
+| 18 | [UnderwritingService.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/service/UnderwritingService.java) | Business Service Layer | Orchestrates WebClient loan detail fetching, risk rule evaluation, and audit log persistence. |
+| 19 | [UnderwritingRuleProcessor.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/processor/UnderwritingRuleProcessor.java) | Business Rule Engine | **Java 17 Switch Pattern Matching Engine** evaluating credit score, DTI, and LTV (`APPROVED`/`REFERRED`/`DECLINED`). |
+| 20 | [RateCalculatorProcessor.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/processor/RateCalculatorProcessor.java) | Financial Math Engine | Calculates pricing quotes, EMI, interest rates (`PRIME`, `NEAR_PRIME`), and 360-mo amortization schedules. |
+| 21 | [NotificationJmsPublisher.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/messaging/NotificationJmsPublisher.java) | JMS Publisher Pattern | Generates event UUIDs, serializes JSON via Jackson, and dispatches messages to ActiveMQ queue. |
+| 22 | [UnderwritingAuditRepository.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/repository/UnderwritingAuditRepository.java) | Repository Layer | Spring Data JPA repository for persisting underwriting audit records. |
+| 23 | [UnderwritingAuditLogEntity.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/domain/UnderwritingAuditLogEntity.java) | JPA Domain Entity | Mapped to PostgreSQL table `freddie_uw.underwriting_audit_logs`. |
+| 24 | [AuthController.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/auth/AuthController.java) | REST Controller Layer | Authentication endpoint controller for Underwriting Service. |
+| 25 | [UnderwritingSecurityFilter.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/filter/UnderwritingSecurityFilter.java) | Security Filter Layer | OncePerRequest filter inspecting HTTP Bearer headers for underwriting requests. |
+| 26 | [SecurityConfig.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/config/SecurityConfig.java) | Spring Security Config | Configures Spring Security chain and CORS/CSRF settings. |
+| 27 | [UnderwritingCache.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/cache/UnderwritingCache.java) | Cache Layer Component | In-memory cache storing risk thresholds and interest rate benchmarks. |
+| 28 | [WebClientConfig.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/config/WebClientConfig.java) | Configuration Component | Defines reactive `WebClient` bean for external REST communication. |
+| 29 | [RestClientConfig.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/config/RestClientConfig.java) | Configuration Component | Configures RestClient bean for synchronous REST communication. |
+| 30 | [AmortizationPdfExporter.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/pdf/AmortizationPdfExporter.java) | Document Exporter | Generates 360-month amortization schedule PDF reports using iText. |
+| 31 | [FinancialMathUtil.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/util/FinancialMathUtil.java) | Utility Helper | Financial compounding math utility for EMI and amortization calculations. |
+| 32 | [UcsApiUtil.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/util/UcsApiUtil.java) | Utility Helper | Standardizes API response status payloads and error wrappers. |
+| 33 | [UnderwritingException.java](file:///c:/ramu/Project_Assignment/RapidX/FreddeMac_Project_RapidX/Work/UCount_App/Ucount_Mini_Application/freddie-loan-platform/underwriting-service/src/main/java/com/freddieapp/underwriting/exception/UnderwritingException.java) | Custom Exception | Custom runtime exception handling underwriting and batch execution errors. |
+
+#### 🔸 Data Transfer Objects (DTOs) & Records (9 Files)
+- `AmortizationScheduleDTO.java`: Record holding monthly payment schedule details and breakdown.
+- `AssessmentRequestDTO.java`: Record containing borrower financial parameters for risk assessment.
+- `AssessmentResultDTO.java`: Record returning underwriting decision (`APPROVED`, `REFERRED`, `DECLINED`) and risk level.
+- `EventDTO.java`: DTO representing event header metadata.
+- `MainEventDTO.java`: Container DTO wrapping `EventDTO` and `PayloadDTO` for ActiveMQ JSON publishing.
+- `NotificationDTO.java`: Response DTO returning JMS publication status and assigned UUID.
+- `OrganizationDTO.java`: DTO containing organization profile and capability details.
+- `PayloadDTO.java`: DTO representing message body content for JMS queue messages.
+- `PricingQuoteDTO.java`: DTO returning interest rate quote, credit tier, and estimated monthly payment.
 
 ---
 
